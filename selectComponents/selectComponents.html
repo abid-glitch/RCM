@@ -1,0 +1,58 @@
+<div class="container">
+    <div class="number-of-times-container">
+        <input
+            id="numberOfSelection"
+            class="input"
+            blueInput
+            type="number"
+            [(ngModel)]="numberOfSelections"
+            (ngModelChange)="numberOfSelectionsChanged()"
+            max="5"
+            min="1"
+            onKeyDown="return false"
+        />
+        <span class="text">{{ 'componentSelectionProperties.numberOfTimesinTemplate' | translate }}</span>
+    </div>
+
+    <div class="row">
+        <div class="section-header bg-light-grey">
+            <label class="section-header-title">
+                {{ 'componentSelectionProperties.componentName' | translate }}
+            </label>
+        </div>
+        <div class="section-header bg-light-blue">
+            <label class="section-header-title">
+                {{ 'componentSelectionProperties.subComponentName' | translate }}
+            </label>
+        </div>
+    </div>
+
+    <div class="row" *ngFor="let component of subComponentsPopulated | keyvalue">
+        <div class="col-left">
+            <label class="component-name">
+                {{ 'componentSelectionProperties.' + component.key + '.label' | translate }}
+            </label>
+        </div>
+        <div class="col-right">
+            <div class="row subcomponent-selection" *ngFor="let subcomponent of component.value | keyvalue">
+                <span class="subcomponent-name">
+                    {{
+                        'componentSelectionProperties.' +
+                            component.key +
+                            '.subComponentSelection.' +
+                            subcomponent.value.subcomponentName | translate
+                    }}
+                </span>
+                <input
+                    [id]="'subComponent_' + subcomponent.value.subcomponentName"
+                    blueCheckbox
+                    type="checkbox"
+                    [checked]="subcomponent.value.defaultValue"
+                    [name]="subcomponent.value.subcomponentName"
+                    [(ngModel)]="subcomponent.value.defaultValue"
+                    (ngModelChange)="checkboxChanged(component.key, subcomponent.value)"
+                />
+            </div>
+        </div>
+    </div>
+</div>
