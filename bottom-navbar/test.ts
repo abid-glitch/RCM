@@ -2,37 +2,48 @@ private removeUnselectedRatingDebts(
     committeeSupportWrapper: CommitteeSupport,
     selectedRatingRecommendationEntities: SelectedRatingRecommendationEntities
 ) {
-    // Check if DEBT exists before trying to access its properties
-    if (!selectedRatingRecommendationEntities.DEBT) {
-        return committeeSupportWrapper; // Return unmodified if DEBT is null/undefined
+    // Return early if any required objects are missing
+    if (!committeeSupportWrapper || !selectedRatingRecommendationEntities) {
+        return committeeSupportWrapper;
+    }
+
+    // Check if entities exist
+    if (!committeeSupportWrapper.entities) {
+        return committeeSupportWrapper;
     }
 
     committeeSupportWrapper.entities.forEach((entity) => {
-        if (entity.debts) {
+        // Process debts if DEBT exists in selectedRatingRecommendationEntities
+        if (entity.debts && selectedRatingRecommendationEntities.DEBT) {
             entity.debts.forEach((debt) => {
-                debt.ratings.forEach((rating) => {
-                    const blueTableData = selectedRatingRecommendationEntities.DEBT.blueTableData.find(
-                        (el) => el.data.identifier === rating.identifier && el.data.immediateParent.id === entity.id
-                    );
-                    if (
-                        !blueTableData &&
-                        !!(rating.proposedOutlook || rating.proposedRating || rating.proposedWatchStatus)
-                    ) {
-                        rating.proposedOutlook = undefined;
-                        rating.proposedRating = undefined;
-                        rating.proposedWatchStatus = undefined;
-                    }
-                });
+                if (debt.ratings) {
+                    debt.ratings.forEach((rating) => {
+                        const blueTableData = selectedRatingRecommendationEntities.DEBT.blueTableData?.find(
+                            (el) => el.data?.identifier === rating.identifier && el.data?.immediateParent?.id === entity.id
+                        );
+                        if (
+                            !blueTableData &&
+                            !!(rating.proposedOutlook || rating.proposedRating || rating.proposedWatchStatus)
+                        ) {
+                            rating.proposedOutlook = undefined;
+                            rating.proposedRating = undefined;
+                            rating.proposedWatchStatus = undefined;
+                        }
+                    });
+                }
             });
         }
-        if (entity.outlook) {
-            const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
-                (el) => el.data.identifier === entity.outlook.identifier && el.data.immediateParent.id === entity.id
+        
+        // Process outlook if CLASS exists in selectedRatingRecommendationEntities
+        if (entity.outlook && selectedRatingRecommendationEntities.CLASS) {
+            const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData?.find(
+                (el) => el.data?.identifier === entity.outlook.identifier && el.data?.immediateParent?.id === entity.id
             );
             if (!blueTableData && !!entity.outlook.proposedOutlook) {
                 entity.outlook.proposedOutlook = undefined;
             }
         }
     });
+    
     return committeeSupportWrapper;
 }
