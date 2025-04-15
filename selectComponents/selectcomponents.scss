@@ -1,0 +1,83 @@
+@use '@moodys/blue-styles/dist/blue' as blue;
+
+.section-header {
+    @include blue.apply('bg-white', 'border-gray-200', 'grid', 'grid-cols-2', 'border-b', 'py-4', 'text-base');
+    &-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #3b3c3e;
+    }
+    width: 50%;
+    padding: 1rem;
+}
+
+.section-header:first-of-type {
+    border-right: 1px solid #dddddd;
+}
+
+.component-group {
+    @include blue.apply('bg-white', 'border-gray-200', 'grid', 'grid-cols-2', 'border-b', 'py-4', 'text-base');
+}
+
+.component-name {
+    @include blue.apply('w-56', 'text-gray-700', 'font-bold', 'text-base');
+}
+
+.container {
+    width: 100%;
+}
+
+.number-of-times-container {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-bottom: 1rem;
+    .text {
+        font-weight: bold;
+        margin-right: 1.125rem;
+    }
+    .input {
+        width: 6rem;
+        text-align: center;
+    }
+}
+
+.row {
+    display: flex;
+    width: 100%;
+    .col-left {
+        width: 50%;
+        font-weight: bold;
+        color: #3b3c3e;
+        padding: 1rem;
+        border-right: 1px solid #dddddd;
+        border-bottom: 1px solid #dddddd;
+    }
+    .col-right {
+        width: 50%;
+    }
+}
+
+.subcomponent-selection {
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.1rem;
+    padding-bottom: 0.1rem;
+    padding-left: 1rem;
+    padding-right: 0.3rem;
+    border-bottom: 1px solid #dddddd;
+    .subcomponent-name {
+        font-weight: 400;
+        color: #3b3c3e;
+    }
+}
+
+.bg-light-grey {
+    background-color: #f1f2f2;
+}
+
+.bg-light-blue {
+    background-color: #f2f2f2;
+}
