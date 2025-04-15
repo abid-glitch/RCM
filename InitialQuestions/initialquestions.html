@@ -1,0 +1,49 @@
+<div class="questions">
+    <!-- CODE_DEBT: Dont incl layout related styles exp: my-2 in 'questions' class -->
+    <div class="flex">
+        <label class="header questions-header">
+            {{ 'actionSetupProperties.initialQuestions.questionslabel' | translate }}
+        </label>
+        <svg
+            blueIcon="info"
+            bluePopoverAnchor
+            [popover]="message"
+            popoverEvent="mouseenter"
+            class="button-link info-tooltip-icon"
+        ></svg>
+        <blue-popover #message class="blue-popover">
+            <div class="blue-popover-label px-2">
+                {{ 'actionSetupProperties.initialQuestions.footNote' | translate }}
+            </div>
+        </blue-popover>
+    </div>
+    <div class="content questions-body">
+        <div class="questions-item" *ngIf="initialQuestionEnabled('initialQuestion1')">
+            <div class="first-question">
+                {{ 'actionSetupProperties.initialQuestions.question.abs.label' | translate }}
+            </div>
+            <div class="first-question-radio">
+                <blue-button-toggle [(ngModel)]="questionnaire.assetBackedSecurities">
+                    <button
+                        blueButtonToggleItem
+                        *ngFor="let assetBackedSecuritiesType of assetBackedSecuritiesTypes"
+                        [value]="assetBackedSecuritiesType"
+                        [attr.data-testid]="assetBackedSecuritiesType + '_button'"
+                    >
+                        {{
+                            'actionSetupProperties.initialQuestions.question.abs.radio.' + assetBackedSecuritiesType
+                                | translate
+                        }}
+                    </button>
+                </blue-button-toggle>
+            </div>
+        </div>
+
+        <app-action-request-question
+            [questionnaire]="questionnaire"
+            [initialQuestionEnabled]="initialQuestionEnabled"
+            (validityStatus)="sectionIsValid.emit($event)"
+            [ratingGroupType]="selectedRatingGroup"
+        ></app-action-request-question>
+    </div>
+</div>
