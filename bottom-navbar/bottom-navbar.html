@@ -1,0 +1,122 @@
+<ng-container *ngIf="userProfile$ | async as userProfile">
+    <blue-sticky-bar class="sticky-bar-bottom sticky-bar sticky-bar-offset" [class.z-20]="isEntitySelectionSection">
+        <ng-container *ngIf="prevPage">
+            <div class="sticky-bar-start" (click)="navBack()" (keydown)="navBack()" tabindex="0">
+                <button
+                    class="button button-secondary"
+                    id="{{ navMetaData?.prevButton?.buttonId }}"
+                    [attr.data-testid]="navMetaData?.prevButton?.buttonId"
+                >
+                    {{ navMetaData?.prevButton?.buttonLabel | translate }}
+                </button>
+            </div>
+        </ng-container>
+
+        <div class="sticky-bar-end">
+            <ng-container *ngTemplateOutlet="cancelButton"></ng-container>
+            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+            <ng-container *ngTemplateOutlet="arfButton"></ng-container>
+            <ng-container *ngTemplateOutlet="continueButton"></ng-container>
+        </div>
+    </blue-sticky-bar>
+
+    <ng-template #saveButton>
+        <button
+            *ngIf="
+                userProfile.roleReadWrite &&
+                !isFinalized &&
+                this.isRatingRecommendation &&
+                (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection)
+            "
+            id="saveBtn"
+            [attr.data-testid]="'saveBtn'"
+            class="button button-secondary"
+            (click)="this.onClickedSaveButton()"
+            [disabled]="
+                (loading$ | async) ||
+                (isEntitySelectionSection && !sectionIsValid) ||
+                !entityService.selectedOrgTobeImpacted.length
+            "
+        >
+            {{ 'navigationControl.saveLabel' | translate }}
+        </button>
+    </ng-template>
+
+    <ng-template #cancelButton>
+        <button
+            *ngIf="
+                userProfile.roleReadWrite &&
+                !isFinalized &&
+                (this.isRatingRecommendation
+                    ? !!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection
+                    : prevPage)
+            "
+            id="cancelBtn"
+            [attr.data-testid]="'cancelBtn'"
+            class="button button-secondary bg-transparent border-0 shadow-none"
+            (click)="confirmCancelSelection()"
+        >
+            {{ 'navigationControl.cancelLabel' | translate }}
+        </button>
+    </ng-template>
+
+    <ng-template #arfButton>
+        <button
+            *ngIf="
+                userProfile.roleReadWrite &&
+                isCommitteeWorkflow &&
+                isArfDownload &&
+                !isArfOnly &&
+                isDownloadStage &&
+                !isFinalized
+            "
+            id="'arfDownload'"
+            [attr.data-testid]="'arfDownload'"
+            class="button"
+            (click)="handleArfDownload()"
+            [disabled]="
+                isDownloadStage && (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)
+            "
+        >
+            {{ 'navigationControl.arfDownload' | translate }}
+        </button>
+    </ng-template>
+    <ng-template #continueButton>
+        <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtn">
+            <button
+                id="{{ navMetaData?.nextButton?.buttonId }}"
+                [attr.data-testid]="navMetaData?.nextButton?.buttonId"
+                class="button"
+                [disabled]="
+                    !sectionIsValid ||
+                    (loading$ | async) ||
+                    (isDownloadStage && (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton))
+                "
+                (click)="confirmContinueSelection()"
+            >
+                {{
+                    (isRatingRecommendation &&
+                    (!!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection) &&
+                    !isDownloadStage
+                        ? 'navigationControl.saveAndContinue'
+                        : navMetaData?.nextButton?.buttonLabel
+                    ) | translate
+                }}
+            </button>
+        </ng-container>
+        <ng-template #continueBtn>
+            <button
+                *ngIf="
+                    !isDownloadStage ||
+                    (isDownloadStage && !this.isArfOnly && isCommitteeWorkflow && isRatingCommitteeWorkflow)
+                "
+                id="{{ navMetaData?.nextButton?.buttonId }}-continue"
+                [attr.data-testid]="navMetaData?.nextButton?.buttonId + '-continue'"
+                class="button"
+                (click)="confirmContinueSelection(false)"
+            >
+                {{ 'navigationControl.continueLabel' | translate }}
+            </button>
+        </ng-template>
+    </ng-template>
+</ng-container>
