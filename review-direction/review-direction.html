@@ -1,0 +1,31 @@
+<div class="review-direction">
+    <div class="review-direction-header">
+        <label class="review-direction-header-title">
+            {{ 'features.regulatoryDisclosures.reviewDirections.title' | translate }}
+        </label>
+        <label class="review-direction-header-note">
+            {{ 'features.regulatoryDisclosures.reviewDirections.note' | translate }}
+        </label>
+    </div>
+    <div class="review-direction-content" *ngFor="let reviewDirection of reviewDirections">
+        <div class="review-direction-content-question">
+            {{ 'features.regulatoryDisclosures.reviewDirections.questions.' + reviewDirection | translate }}
+        </div>
+        <div class="review-direction-content-choice">
+            <input
+                class="shadow-none"
+                id="reviewDirectionChoice-{{ reviewDirection }}"
+                [attr.data-testid]="'reviewDirectionChoice' + '_' + reviewDirection"
+                blueCheckbox
+                type="checkbox"
+                [checked]="
+                    reviewDirection
+                        | optionIsSelected
+                            : { count: selectedReviewDirections.length, selected: selectedReviewDirections }
+                "
+                [value]="reviewDirection"
+                (change)="onReviewDirectionChanged(reviewDirection)"
+            />
+        </div>
+    </div>
+</div>
