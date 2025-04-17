@@ -1,0 +1,43 @@
+<ng-container *ngIf="primaryMethodology$ | async as methodologyList">
+    <div class="container-methodology">
+        <div class="methodology-col-span">
+            <app-methodology-sector
+                [isRequired]="isRequired"
+                [showRequiredError]="showRequiredError"
+                [selectedSector]="selectedSector$ | async"
+                [sectorList]="methodologyList.sectorList"
+                (changeSector)="onChangeSelectedSector($event)"
+            ></app-methodology-sector>
+            <!--Methodology List-->
+        </div>
+        <div class="methodology-col-span">
+            <app-methodology-list
+                [isRequired]="isRequired"
+                [showRequiredError]="showRequiredError"
+                (manageMethodology)="addMethodology($event)"
+                [primaryMethodologyOptionsList]="selectedSectorOption$ | async"
+                [selectedMethodology]="selectedMethodologies$ | async"
+            ></app-methodology-list>
+        </div>
+    </div>
+    <app-methodology-assumption-questions-enhanced
+        [isRatingCommitteeClose]="isRatingCommitteeClose"
+        [isActionRequestFormSetup]="isActionRequestFormSetup"
+        [selectedMethodologyList]="selectedMethodologyValues$ | async"
+        [methodologyJurisdiction]="methodologyJurisdiction$ | async"
+        [prDisclosure]="prRDisclosure$ | async"
+        (updateMethodologyDisclosure)="updateMethodologyDisclosure($event)"
+        (manageMethodology)="addMethodology($event)"
+        (sectionIsValid)="selectedMethodologySectionIsValid = $event; setMethodologySectionValidityStatus()"
+        (methodologyCheckBoxAction)="manageMethodologyCheckBoxAction($event)"
+        [selectedRatingGroup]="selectedRatingGroup$ | async"
+    ></app-methodology-assumption-questions-enhanced>
+
+    <ng-container *ngIf="showRfcSection$ | async">
+        <app-request-for-comments
+            (rfcSectionIsValid)="rfcSectionIsValid = $event; setMethodologySectionValidityStatus()"
+            (selectedRfcImpactType)="setSelectedImpactType($event)"
+            [rfcValue]="selectedRfcImpactType$ | async"
+        ></app-request-for-comments>
+    </ng-container>
+</ng-container>
