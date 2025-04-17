@@ -1,0 +1,468 @@
+<ng-container *ngIf="updateCRQT$ | async"></ng-container>
+<div>
+    <!--CRQT Question-->
+    <div
+        class="header section-header"
+        *ngIf="isLGDModelUsedEnabled || isCrsCrmVerifiedEnabled || isInsuranceScoreUseEnabled"
+    >
+        <ng-template #otherGroupLabel>
+            <label
+                class="section-header-title"
+                *ngIf="
+                    !(
+                        selectedRatingGroup ===
+                        (RatingGroupsEnum.SubSovereign ||
+                            RatingGroupsEnum.SovereignBond ||
+                            RatingGroupsEnum.SovereignMDB)
+                    )
+                "
+                ;
+            >
+                {{ 'committeeSetupProperties.creditRatingScorecardModel.title' | translate }}
+            </label>
+        </ng-template>
+    </div>
+    <div class="questions-item" *ngIf="isLGDModelUsedEnabled">
+        <div
+            class="credit-model-question"
+            *ngIf="
+                selectedRatingGroup !==
+                (RatingGroupsEnum .SubSovereign || RatingGroupsEnum.SovereignBond || RatingGroupsEnum.SovereignMDB)
+            "
+        >
+            <div>{{ 'committeeSetupProperties.lgdModelUsed.question' | translate }}</div>
+        </div>
+        <div class="choice">
+            <blue-button-toggle [(ngModel)]="committeeInfo.lgdModelUsed" id="lgdModelChoice">
+                <button
+                    blueButtonToggleItem
+                    [attr.data-testid]="'lgdModelUsed_' + yesNoUnknownOptions.No"
+                    [value]="yesNoUnknownOptions.No"
+                >
+                    {{ 'yesNoOptions.NO' | translate }}
+                </button>
+                <button
+                    blueButtonToggleItem
+                    [attr.data-testid]="'lgdModelUsed_' + yesNoUnknownOptions.Yes"
+                    [value]="yesNoUnknownOptions.Yes"
+                >
+                    {{ 'yesNoOptions.YES' | translate }}
+                </button>
+            </blue-button-toggle>
+        </div>
+    </div>
+
+    <ng-container
+        *ngIf="
+            selectedRatingGroup === RatingGroupsEnum.SovereignBond ||
+                selectedRatingGroup === RatingGroupsEnum.SubSovereign ||
+                selectedRatingGroup === RatingGroupsEnum.SovereignMDB;
+            else generativeQuestions
+        "
+    >
+        <div class="questions-item">
+            <div class="credit-model-question">
+                <div>{{ 'committeeSetupProperties.crqt.mainQuestion' | translate }}*</div>
+            </div>
+
+            <div class="choice yes-no-na-choice">
+                <blue-button-toggle
+                    [(ngModel)]="committeeInfo.crqtDeterminedProposedCreditRating"
+                    (ngModelChange)="setCrqt()"
+                    id="crqtDeterminedProposedCreditRating"
+                >
+                    <button
+                        blueButtonToggleItem
+                        [attr.data-testid]="'crqtDeterminedProposedCreditRating_' + yesNoUnknownOptions.No"
+                        [value]="yesNoUnknownOptions.No"
+                    >
+                        {{ 'yesNoOptions.NO' | translate }}
+                    </button>
+                    <button
+                        blueButtonToggleItem
+                        [attr.data-testid]="'crqtDeterminedProposedCreditRating_' + yesNoUnknownOptions.Yes"
+                        [value]="yesNoUnknownOptions.Yes"
+                    >
+                        {{ 'yesNoOptions.YES' | translate }}
+                    </button>
+                </blue-button-toggle>
+            </div>
+        </div>
+
+        <ng-container *ngIf="committeeInfo.crqtDeterminedProposedCreditRating === yesNoUnknownOptions.Yes">
+            <div class="questions-item select-crqts">
+                <div class="credit-model-question">
+                    <div>{{ 'committeeSetupProperties.crqt.selectCrqts' | translate }}*:</div>
+                </div>
+            </div>
+            <div class="crqt-table">
+                <div class="crqt-table-header">
+                    <span class="crqt-table-header_title span-4-col">
+                        {{ 'committeeSetupProperties.crqt.methodology' | translate }}
+                    </span>
+                    <span class="crqt-table-header_title span-4-col credit-rating-scorecard">
+                        {{ 'committeeSetupProperties.crqt.creditRatingScorecard' | translate }}
+                    </span>
+                    <span class="crqt-table-header_title span-4-col model">
+                        {{ 'committeeSetupProperties.crqt.model' | translate }}
+                    </span>
+                </div>
+                <ng-container *ngFor="let crqt of committeeInfo.crqt">
+                    <div class="crqt-table-body">
+                        <div class="rating-methodology span-4-col">
+                            {{ crqt.publicationName }}
+                        </div>
+                        <div class="credit-rating-scorecard span-4-col">
+                            <input
+                                blueCheckbox
+                                type="checkbox"
+                                [checked]="crqt.creditRatingScoreCard"
+                                [(ngModel)]="crqt.creditRatingScoreCard"
+                            />
+                        </div>
+                        <div class="model span-4-col">
+                            <input blueCheckbox type="checkbox" [checked]="crqt.model" [(ngModel)]="crqt.model" />
+                        </div>
+                    </div>
+                </ng-container>
+            </div>
+
+            <div class="crqt-note">
+                <svg blueIcon="info"></svg>
+                <span>{{ 'committeeSetupProperties.crqt.note.ensureCrqt' | translate }}</span>
+            </div>
+
+            <div class="questions-item">
+                <div class="credit-model-question">
+                    <div>{{ 'committeeSetupProperties.crsCrmVerified.question' | translate }}*</div>
+                </div>
+
+                <div class="choice yes-no-na-choice">
+                    <blue-button-toggle
+                        [(ngModel)]="committeeInfo.leadAnalystVerifiedCRQT"
+                        id="leadAnalystVerifiedCRQT"
+                    >
+                        <button
+                            blueButtonToggleItem
+                            [attr.data-testid]="'leadAnalystVerifiedCRQT_' + yesNoUnknownOptions.No"
+                            [value]="yesNoUnknownOptions.No"
+                        >
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button
+                            blueButtonToggleItem
+                            [attr.data-testid]="'leadAnalystVerifiedCRQT_' + yesNoUnknownOptions.Yes"
+                            [value]="yesNoUnknownOptions.Yes"
+                        >
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+            <div class="questions-item">
+                <div class="credit-model-question">
+                    <div>{{ 'committeeSetupProperties.crqt.wereAnyCRQTsUsed' | translate }}*</div>
+                </div>
+
+                <div class="choice yes-no-na-choice">
+                    <blue-button-toggle [(ngModel)]="committeeInfo.referenceOnlyCRQT" id="referenceOnlyCRQT">
+                        <button
+                            blueButtonToggleItem
+                            [attr.data-testid]="'referenceOnlyCRQT_' + yesNoUnknownOptions.No"
+                            [value]="yesNoUnknownOptions.No"
+                        >
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button
+                            blueButtonToggleItem
+                            [attr.data-testid]="'referenceOnlyCRQT_' + yesNoUnknownOptions.Yes"
+                            [value]="yesNoUnknownOptions.Yes"
+                        >
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+            <div class="crqt-note" *ngIf="committeeInfo.referenceOnlyCRQT === yesNoUnknownOptions.Yes">
+                <svg blueIcon="info"></svg>
+                <span>{{ 'committeeSetupProperties.crqt.note.clearlyMark' | translate }}</span>
+            </div>
+        </ng-container>
+    </ng-container>
+    <ng-template #generativeQuestions>
+        <div class="questions-item" *ngIf="isCrsCrmVerifiedEnabled == true">
+            <div class="credit-model-question">
+                <div>{{ 'committeeSetupProperties.crsCrmVerified.question' | translate }}</div>
+            </div>
+
+            <div class="choice yes-no-na-choice">
+                <blue-button-toggle [(ngModel)]="committeeInfo.crsCrmVerified" id="crsCrmChoice">
+                    <button
+                        blueButtonToggleItem
+                        [attr.data-testid]="'crsCrmVerified_' + yesNoUnknownOptions.No"
+                        [value]="yesNoUnknownOptions.No"
+                    >
+                        {{ 'yesNoOptions.NO' | translate }}
+                    </button>
+                    <button
+                        blueButtonToggleItem
+                        [attr.data-testid]="'crsCrmVerified_' + yesNoUnknownOptions.Yes"
+                        [value]="yesNoUnknownOptions.Yes"
+                    >
+                        {{ 'yesNoOptions.YES' | translate }}
+                    </button>
+
+                    <button
+                        *ngIf="
+                            selectedRatingGroup !==
+                            (RatingGroupsEnum.SubSovereign ||
+                                RatingGroupsEnum.SovereignBond ||
+                                RatingGroupsEnum.SovereignMDB)
+                        "
+                        blueButtonToggleItem
+                        [attr.data-testid]="'crsCrmVerified_' + yesNoUnknownOptions.Unknown"
+                        [value]="yesNoUnknownOptions.Unknown"
+                    >
+                        {{ 'optionsLabel.NA' | translate }}
+                    </button>
+                </blue-button-toggle>
+            </div>
+        </div>
+    </ng-template>
+
+    <div class="questions-item" *ngIf="isInsuranceScoreUseEnabled">
+        <div class="credit-model-question">
+            <div>{{ 'committeeSetupProperties.insuranceScoreUsed.question' | translate }}</div>
+        </div>
+
+        <div class="choice">
+            <blue-button-toggle
+                [(ngModel)]="committeeInfo.insuranceScoreUsed"
+                id="insuranceScoreChoice"
+                (change)="onInsuranceChange($event)"
+            >
+                <button blueButtonToggleItem data-testid="insuranceScoreUsed_No" [value]="yesNoUnknownOptions.No">
+                    {{ 'yesNoOptions.NO' | translate }}
+                </button>
+                <button blueButtonToggleItem data-testid="insuranceScoreUsed_Yes" [value]="yesNoUnknownOptions.Yes">
+                    {{ 'yesNoOptions.YES' | translate }}
+                </button>
+            </blue-button-toggle>
+        </div>
+    </div>
+
+    <div
+        class="questions-item"
+        *ngIf="isInsuranceScoreUseEnabled && committeeInfo.insuranceScoreUsed === yesNoUnknownOptions.Yes"
+    >
+        <div class="credit-model-question">
+            <div>{{ 'committeeSetupProperties.insuranceScoreUsedOverIndMethodology.question' | translate }}</div>
+        </div>
+
+        <div class="choice">
+            <blue-button-toggle
+                [(ngModel)]="committeeInfo.insuranceScoreUsedOverIndMethodology"
+                id="insuranceScoreInMethodologyChoice"
+            >
+                <button
+                    blueButtonToggleItem
+                    data-testid="insuranceScoreUsedOverIndMethodology_Yes"
+                    [value]="yesNoUnknownOptions.Yes"
+                >
+                    {{ 'yesNoOptions.YES' | translate }}
+                </button>
+                <button
+                    blueButtonToggleItem
+                    data-testid="insuranceScoreUsedOverIndMethodology_No"
+                    [value]="yesNoUnknownOptions.No"
+                >
+                    {{ 'yesNoOptions.NO' | translate }}
+                </button>
+            </blue-button-toggle>
+        </div>
+    </div>
+
+    <!--Exotic question-->
+
+    <div>
+        <ng-container
+            *ngIf="
+                selectedRatingGroup === RatingGroupsEnum.SovereignBond ||
+                    selectedRatingGroup === RatingGroupsEnum.SubSovereign ||
+                    selectedRatingGroup === RatingGroupsEnum.SovereignMDB;
+                else otherGroupExoticQuestions
+            "
+        >
+            <div class="header section-header contact-cco">
+                <svg class="blue-info" blueIcon="alert-octagon"></svg>
+                <label class="contact-cco">
+                    {{ 'committeeSetupProperties.contactCCO.title' | translate }}
+                </label>
+            </div>
+            <div class="exotic-questions-item">
+                <div class="credit-rating-question">
+                    {{ 'committeeSetupProperties.contactCCO.contactCCOQuestion' | translate }}
+                </div>
+                <div class="choice">
+                    <blue-button-toggle
+                        [(ngModel)]="committeeInfo.exoticOrBespokeConsidered"
+                        id="exoticConsideredChoice"
+                        (ngModelChange)="exoticOrBespokeChange()"
+                    >
+                        <button
+                            blueButtonToggleItem
+                            data-testid="exoticOrBespokeConsidered_No"
+                            [value]="yesNoUnknownOptions.No"
+                        >
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button
+                            blueButtonToggleItem
+                            data-testid="exoticOrBespokeConsidered_Yes"
+                            [value]="yesNoUnknownOptions.Yes"
+                        >
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+            <div class="mrg-required-message" *ngIf="committeeInfo.mrgApproved === yesNoUnknownOptions.No">
+                <svg class="red-info" blueIcon="alert-octagon"></svg>
+                {{ 'committeeSetupProperties.exoticOrBespoke.mrgApprovalRequiredToProceed' | translate }}
+            </div>
+            <div
+                class="exotic-questions-item"
+                *ngIf="committeeInfo.exoticOrBespokeConsidered === yesNoUnknownOptions.Yes"
+            >
+                <div class="credit-rating-question">
+                    {{ 'committeeSetupProperties.exoticOrBespoke.sovApprovalRequiredQuestion' | translate }}
+                </div>
+                <div class="choice">
+                    <blue-button-toggle [(ngModel)]="committeeInfo.mrgApproved" id="mrgApprovalChoice">
+                        <button blueButtonToggleItem data-testid="mrgApproved_No" [value]="yesNoUnknownOptions.No">
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button blueButtonToggleItem data-testid="mrgApproved_Yes" [value]="yesNoUnknownOptions.Yes">
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+        </ng-container>
+
+        <ng-template #otherGroupExoticQuestions>
+            <div class="header section-header">
+                <label class="section-header-title">
+                    {{ 'committeeSetupProperties.exoticOrBespoke.title' | translate }}
+                </label>
+            </div>
+            <div class="exotic-questions-item">
+                <div class="credit-rating-question">
+                    {{ 'committeeSetupProperties.exoticOrBespoke.committeeConsideringQuestion' | translate }}
+                </div>
+                <div class="choice">
+                    <blue-button-toggle
+                        [(ngModel)]="committeeInfo.exoticOrBespokeConsidered"
+                        id="exoticConsideredChoice"
+                        (ngModelChange)="exoticOrBespokeChange()"
+                    >
+                        <button
+                            blueButtonToggleItem
+                            data-testid="exoticOrBespokeConsidered_No"
+                            [value]="yesNoUnknownOptions.No"
+                        >
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button
+                            blueButtonToggleItem
+                            data-testid="exoticOrBespokeConsidered_Yes"
+                            [value]="yesNoUnknownOptions.Yes"
+                        >
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+            <div
+                class="exotic-questions-item"
+                *ngIf="committeeInfo.exoticOrBespokeConsidered === yesNoUnknownOptions.Yes"
+            >
+                <div class="credit-rating-question">
+                    {{ 'committeeSetupProperties.exoticOrBespoke.approvalRequiredQuestion' | translate }}
+                </div>
+                <div class="choice">
+                    <blue-button-toggle [(ngModel)]="committeeInfo.mrgApproved" id="mrgApprovalChoice">
+                        <button blueButtonToggleItem data-testid="mrgApproved_No" [value]="yesNoUnknownOptions.No">
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button blueButtonToggleItem data-testid="mrgApproved_Yes" [value]="yesNoUnknownOptions.Yes">
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+        </ng-template>
+    </div>
+
+    <!--Gen AI Question-->
+    <ng-container>
+        <div class="header section-header">
+            <label class="section-header-title" for="genAIRatingProcess">
+                {{ 'committeeSetupProperties.generativeAIUsage.title' | translate }}
+            </label>
+        </div>
+        <div class="exotic-questions-item">
+            <div
+                class="credit-rating-question"
+                *ngIf="
+                    selectedRatingGroup === RatingGroupsEnum.SovereignBond ||
+                        selectedRatingGroup === RatingGroupsEnum.SubSovereign ||
+                        selectedRatingGroup === RatingGroupsEnum.SovereignMDB;
+                    else generativeAIUsageQuestion
+                "
+            >
+                {{ 'committeeSetupProperties.generativeAIUsage.generativeAIQuestionsLabel' | translate }}
+            </div>
+            <ng-template #generativeAIUsageQuestion>
+                <div class="credit-rating-question">
+                    {{ 'committeeSetupProperties.generativeAIUsage.generativeAIQuestions' | translate }}
+                </div>
+            </ng-template>
+
+            <div class="choice">
+                <blue-button-toggle
+                    [(ngModel)]="committeeInfo.genAIUsedInRatingProcess"
+                    (ngModelChange)="isAIAttestedModelChange($event)"
+                    id="genAIRatingProcess"
+                >
+                    <button blueButtonToggleItem [value]="yesNoUnknownOptions.No">
+                        {{ 'yesNoOptions.NO' | translate }}
+                    </button>
+                    <button blueButtonToggleItem [value]="yesNoUnknownOptions.Yes">
+                        {{ 'yesNoOptions.YES' | translate }}
+                    </button>
+                </blue-button-toggle>
+            </div>
+        </div>
+        <div class="exotic-questions-item" *ngIf="committeeInfo.genAIUsedInRatingProcess === yesNoUnknownOptions.Yes">
+            <div class="credit-rating-question">
+                {{ 'committeeSetupProperties.generativeAIUsage.generativeAIUsageQuestion' | translate }}
+            </div>
+            <div class="choice">
+                <div>
+                    <input
+                        blueCheckbox
+                        id="generativeAIOption"
+                        type="checkbox"
+                        [checked]="committeeInfo.confirmUnderstandingGenAIUsage"
+                        (change)="checkValue($event)"
+                    />
+                    <label class="adjust-padding" for="generativeAIOption">
+                        {{ 'committeeSetupProperties.generativeAIUsage.generativeAIUsageOptions.label' | translate }}
+                    </label>
+                </div>
+            </div>
+        </div>
+    </ng-container>
+</div>
+<ng-container *ngIf="listenForMethodologyChanges$ | async"></ng-container>
