@@ -1,0 +1,6 @@
+export enum ReviewDirections {
+    economicFinancialCredit = 'ECONOMIC_FINANCIAL_CREDIT',
+    changeInMethodologies = 'CHANGE_IN_METHODOLOGIES',
+    linkage = 'LINKAGE',
+    other = 'OTHER',
+    notApplicable = 'NOT_APPLICABLE'}
