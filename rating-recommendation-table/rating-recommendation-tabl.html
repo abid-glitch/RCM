@@ -1,0 +1,44 @@
+<ng-container *ngIf="viewTableBy$ | async as tableView">
+    <app-rating-recommendation-header
+        [viewTableBy]="tableView"
+        [selectedEntityDetails]="headerDetail$ | async"
+        [enableActionButton]="enableActionButton$ | async"
+        (changeViewTableBy)="updateViewTableBy($event)"
+        (dispatchBulkAction)="onBulkActionDispatched($event)"
+    ></app-rating-recommendation-header>
+    <div class="mt-3 rating-table-container" id="table-content">
+        <ng-container *ngIf="ratingRecommendation$ | async as ratingRecommendation">
+            <app-recommendation-table
+                (selectedEntityChanged)="onSelectedRatingEntity($event)"
+                (recommendationChange)="onRecommendationChange($event)"
+                (updatedRatingRecommendation)="onUpdatedRatingRecommendation($event)"
+                [isFigBanking]="isFigBanking$ | async"
+                [selectedTableView]="tableView"
+                [ratingRecommendation]="ratingRecommendation"
+                [recommendationsDropdownOptionMapping]="recommendationsDropdownOptionMapping$ | async"
+                [continueClicked]="continueClicked$ | async"
+                [isCommitteeWorkflow]="isCommitteeWorkflow"
+            ></app-recommendation-table>
+        </ng-container>
+    </div>
+</ng-container>
+<app-bottom-navbar
+    (continueClickedEventEmitter)="onContinueClicked()"
+    [navMetaData]="buttonMetadata"
+    [prevPage]="
+        isFIGTemplateSelected && selectedTemplate !== ratingTemplate.Arf
+            ? appRoutes.COMPONENT_SELECTION_PROPERTIES
+            : selectedTemplate === ratingTemplate.ArfRcm
+            ? appRoutes.COMMITTEE_SETUP_PROPERTIES
+            : selectedTemplate === ratingTemplate.Arf
+            ? appRoutes.ACTION_SETUP_PROPERTIES
+            : appRoutes.COMMITTEE_SETUP_PROPERTIES
+    "
+    [sectionIsValid]="true"
+    [isDownloadStage]="true"
+    [isRatingsTableValid]="isRatingsTableValid$ | async"
+    [enableActionButton]="enableActionButton$ | async"
+></app-bottom-navbar>
+<ng-container *ngIf="isLoading$ | async"></ng-container>
+<ng-container *ngIf="warningAndSuccessAlert$ | async"></ng-container>
+<ng-container *ngIf="manageRatingsSyncDirection$ | async"></ng-container>
