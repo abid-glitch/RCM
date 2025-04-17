@@ -1,0 +1,119 @@
+<div class="selected-rating-methodology" *ngIf="showRatingMethodologyFlag">
+    <div class="header selected-rating-methodology-header">
+        <label class="selected-rating-methodology-title first-col-title">
+            {{ 'actionSetupProperties.selectedRatingMethodology.label.title' | translate }}
+        </label>
+        <label class="selected-rating-methodology-title">
+            {{ 'actionSetupProperties.selectedRatingMethodology.label.assumptionLabel' | translate }}
+        </label>
+        <label class="selected-rating-methodology-title">
+            {{ 'actionSetupProperties.selectedRatingMethodology.label.question' | translate }}
+        </label>
+    </div>
+    <div
+        class="content rating-methodology-body"
+        *ngFor="let selectedRatingMethodologyOption of selectedPrimaryMethodologyFromList"
+    >
+        <div class="selected-rating-methodology-question">
+            <div class="selected-rating-methodology-question-values rating-methodology-question">
+                ({{ 'features.regionJurisdiction.options.' + methodologyJurisdiction | translate }})
+                {{ selectedRatingMethodologyOption.label || selectedRatingMethodologyOption.name }}
+                ({{ getMethodologyDate(selectedRatingMethodologyOption) }})
+            </div>
+            <div class="selected-rating-methodology-question-values">
+                <select
+                    class="methodology-assumption"
+                    blueSelect
+                    [name]="'methodologyAssumption'"
+                    [id]="'methodologyAssumption'"
+                    [attr.data-testid]="'methodologyAssumption_' + selectedRatingMethodologyOption.id"
+                    (change)="updateMethodologyAssumptionsToModel(selectedRatingMethodologyOption, $event.target.value)"
+                    [(ngModel)]="getPublicationByRegion(selectedRatingMethodologyOption).disclosure"
+                    *ngIf="!isEnabledMethodologyDisclosure(selectedRatingMethodologyOption); else assumptionFixedAnswer"
+                >
+                    <option [value]="undefined">
+                        {{
+                            'actionSetupProperties.selectedRatingMethodology.methodologyAssumptions.defaultLabel'
+                                | translate
+                        }}
+                    </option>
+                    <option *ngFor="let assumptions of allMethodologySensitivities" value="{{ assumptions }}">
+                        {{
+                            'actionSetupProperties.selectedRatingMethodology.methodologyAssumptions.' + assumptions
+                                | translate
+                        }}
+                    </option>
+                </select>
+                <ng-template #assumptionFixedAnswer>
+                    <div
+                        class="methodology-assumption rating-methodology-question"
+                        [attr.data-testid]="'methodologyAssumptionDisclosure_' + selectedRatingMethodologyOption.name"
+                    >
+                        {{
+                            'actionSetupProperties.selectedRatingMethodology.methodologyAssumptions.' +
+                                getPublicationByRegion(selectedRatingMethodologyOption).disclosure | translate
+                        }}
+                    </div>
+                </ng-template>
+            </div>
+            <div class="choice selected-rating-methodology-question-values">
+                <blue-button-toggle
+                    [(ngModel)]="
+                        selectedMethodologyQuestionsChoice[
+                            selectedRatingMethodologyOption.value
+                                ? selectedRatingMethodologyOption.value
+                                : selectedRatingMethodologyOption.id
+                        ]
+                    "
+                    (click)="updateMethodologyQuestionsToModel()"
+                >
+                    <button
+                        blueButtonToggleItem
+                        [value]="yesNoUnknownOptions.No"
+                        [attr.data-testid]="yesNoUnknownOptions.No + '_' + selectedRatingMethodologyOption.id"
+                    >
+                        {{ 'features.prDisclosure.no' | translate }}
+                    </button>
+                    <button
+                        blueButtonToggleItem
+                        [value]="yesNoUnknownOptions.Yes"
+                        [attr.data-testid]="yesNoUnknownOptions.Yes + '_' + selectedRatingMethodologyOption.id"
+                    >
+                        {{ 'features.prDisclosure.yes' | translate }}
+                    </button>
+                </blue-button-toggle>
+            </div>
+        </div>
+    </div>
+    <div class="selected-rating-methodology-checkbox">
+        <div class="flex">
+            <input
+                class="shadow-none"
+                blueCheckbox
+                id="moreInfoThanSelMethodology"
+                data-testid="moreInfoThanSelMethodology"
+                type="checkbox"
+                [(ngModel)]="prDisclosure.moreInfoThanSelectedMethodology"
+                (ngModelChange)="updateMoreInfoAndArabicTraslated()"
+            />
+            <label class="field-label" for="moreInfoThanSelMethodology">
+                {{ 'features.prDisclosure.questions.moreInfoThanSelectedMethodology.label' | translate }}
+            </label>
+        </div>
+        <div class="flex" *ngIf="isRatingCommitteeMemo">
+            <input
+                class="shadow-none"
+                blueCheckbox
+                id="arabicDomicileKSA"
+                data-testid="arabicDomicileKSA"
+                type="checkbox"
+                [(ngModel)]="prDisclosure.arabicTranslatedDomicileKSA"
+                (ngModelChange)="updateMoreInfoAndArabicTraslated()"
+            />
+            <label class="field-label" for="arabicDomicileKSA">
+                {{ 'features.prDisclosure.questions.arabicDomicileKSA.label' | translate }}
+            </label>
+        </div>
+    </div>
+</div>
+<ng-container *ngIf="manageMethodologySelectedOptions$ | async"></ng-container>
