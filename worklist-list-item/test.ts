@@ -392,10 +392,19 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             tableMode: RatingsTableMode.EditRecommendation,
             ratingsDetails: this.selectedCaseEntityDictionary
         });
-        this.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
+        
+        // Try using the casesService.router for consistency with other navigation methods
+        this.casesService.router
+            .navigate([AppRoutes.CASE, this.case.id, AppRoutes.RATING_RECOMMENDATION], { replaceUrl: true })
             .then(() => {
                 this.contentLoaderService.hide();
+            })
+            .catch(error => {
+                console.error('Navigation error:', error);
+                this.contentLoaderService.hide();
+                
+                // Fallback approach if the first method fails
+                window.location.href = `/${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
             });
     }
 }
