@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+
 import { BlueModalRef, BluePopoverAnchor } from '@moodys/blue-ng';
 import { Case, CasesActions } from '../../types/case';
 import { MenuData } from '../../types/enums/worklist.enums';
@@ -86,6 +87,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
+    showRatingRecommendationOption = false;
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -104,7 +106,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     openModal(value: string) {
-        console.log('openModal called with value:', value); // Debug log
         /* TODO REFACTOR CODE*/
         if (value === 'Rename Case') {
             this.modalData.event = MenuData.rename;
@@ -127,9 +128,13 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.navigateToInviteesPage();
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
-        } else if (value === 'Rating Recommendation' || value === 'Rating Recommendations') {
-            console.log('Rating Recommendation option selected'); // Debug log
-            this.navigateToRatingRecommendation();
+        }
+        else if (value == 'Rating Recommendation'){
+            this.ratingRecommendationService.setRatingsTableMode({
+                tableMode : RatingsTableMode.NewRecommendation, 
+                ratingsDetails : null
+            });
+            this.router.navigate([AppRoutes.RATING_RECOMMENDATION])
         }
     }
 
@@ -139,6 +144,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.dataService.isExistingCase = true;
         this.prepareTransition();
     }
+
 
     prepareTransition() {
         this.clearEntity();
@@ -385,40 +391,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 this.contentLoaderService.hide();
             });
     }
-
-    // Direct method for navigating to Rating Recommendation
-    private navigateToRatingRecommendation() {
-        console.log('Navigating to Rating Recommendation');
-        this.contentLoaderService.show();
-        
-        // Store the data in a service that persists through navigation
-        this.createCurrentEntityDictionary();
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-        });
-
-        // Add a delay before navigation to ensure data is set
-        setTimeout(() => {
-            try {
-                // Use the casesService.router with new options to prevent redirection
-                this.casesService.router.navigate(
-                    [`${AppRoutes.CASE}/${this.case.id}/rating-recommendation`], 
-                    { 
-                        skipLocationChange: false,
-                        replaceUrl: false
-                    }
-                ).then(() => {
-                    // Keep the loader active longer to ensure navigation completes
-                    setTimeout(() => this.contentLoaderService.hide(), 1000);
-                }).catch(err => {
-                    console.error('Navigation error:', err);
-                    this.contentLoaderService.hide();
-                });
-            } catch (error) {
-                console.error('Navigation setup failed:', error);
-                this.contentLoaderService.hide();
-            }
-        }, 500); // Short delay to ensure state is set
-    }
 }
+
+
