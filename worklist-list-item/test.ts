@@ -316,9 +316,13 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             )
         );
         
-        // Check for rating recommendation - now always show when entities exist
-        // This enables the option after either save or save & download
-        this.showRatingRecommendation = this.case.caseDataReference?.entities?.length > 0;
+        // Check if case was saved - look for lastSaveAndDownloadDate
+        const isCaseSaved = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
+        
+        // Only show rating recommendation option when entities exist AND case was saved
+        this.showRatingRecommendation = 
+            this.case.caseDataReference?.entities?.length > 0 && 
+            isCaseSaved;
         
         const isRatingCommitteeWorkflow =
             (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
@@ -352,6 +356,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     private createCurrentEntityDictionary() {
+        this.selectedCaseEntityDictionary = {};
         for (const entity of this.case.caseDataReference.entities) {
             const debt = entity.debts ?? [];
             const ratingClass = entity.ratingClasses ?? [];
@@ -396,6 +401,21 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     
     private navigateToRatingRecommendationPage() {
         this.contentLoaderService.show();
-        this.openExistingCase(); // This will redirect to the rating recommendation table page
+        
+        // Create entity dictionary to pass to the rating recommendation service
+        this.createCurrentEntityDictionary();
+        
+        // Set up the rating recommendation service with the current entity data
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: this.selectedCaseEntityDictionary
+        });
+        
+        // Navigate directly to the rating recommendation page
+        this.router
+            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
+            .then(() => {
+                this.contentLoaderService.hide();
+            });
     }
 }
