@@ -1,0 +1,136 @@
+<ng-container *ngIf="userProfile$ | async as userDetails">
+    <blue-card class="card-margin" [attr.data-testid]="'caseId_' + case.id">
+        <!--how to apply font bliss pro and sans serif-->
+        <blue-card-content class="case">
+            <div class="w-1/2">
+                <div class="case-meta">
+                    <div class="case-meta-title">{{ 'worklist.item.tableHeaders.caseName' | translate }}</div>
+                </div>
+                <div class="case-data">
+                    <div class="case-data-set break-all">
+                        <a
+                            (click)="openExistingCase()"
+                            class="case-data-set-name"
+                            title="{{ case.name }}"
+                            href="javascript:void(0)"
+                        >
+                            {{ case.name }}
+                        </a>
+                        <br />
+                        <div class="case-data-set-info">Case ID: {{ case.caseId }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="w-1/12">
+                <div class="case-meta">
+                    <div class="case-meta-title-space">
+                        {{ 'worklist.item.tableHeaders.camsId' | translate }}
+                    </div>
+                </div>
+                <div class="type">
+                    {{ case.caseDataReference?.committeeMemoSetup?.conflictCheckId ?? '-' }}
+                </div>
+            </div>
+            <div class="w-1/12">
+                <div class="case-meta">
+                    <div class="case-meta-title">
+                        {{ 'worklist.item.tableHeaders.type' | translate }}
+                    </div>
+                </div>
+                <div class="type">
+                    <blue-pill *ngFor="let type of case.caseTypes" class="pill-margin">
+                        {{ type }}
+                    </blue-pill>
+                </div>
+            </div>
+            <div class="case-width">
+                <div class="case-meta">
+                    <div class="case-meta-title">
+                        {{ 'worklist.item.tableHeaders.lastModifiedBy' | translate }}
+                    </div>
+                </div>
+                <div class="case-data">
+                    <div class="case-data-set">
+                        {{ case.lastModifiedBy }}
+                    </div>
+                    <div class="case-data-date">
+                        {{ case.lastModifiedDate | date : 'dd MMM Y' }}
+                    </div>
+                </div>
+            </div>
+            <div class="case-width">
+                <div class="case-meta">
+                    <div class="case-meta-title">{{ 'worklist.item.tableHeaders.createdBy' | translate }}</div>
+                </div>
+                <div class="case-data">
+                    <div class="case-data-set">
+                        {{ case.createdBy }}
+                    </div>
+                    <div class="case-data-date">
+                        {{ case.createdDate | date : 'dd MMM Y' }}
+                    </div>
+                </div>
+            </div>
+            <button blueButton bluePopoverAnchor [popover]="menu2" class="button-link">
+                <svg blueIcon="more-vertical"></svg>
+            </button>
+            <blue-popover #menu2>
+                <ul blueMenu>
+                    <li>
+                        <button
+                            *ngIf="userProfile.roleReadWrite"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + renameMenuText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(renameMenuText.textContent)"
+                        >
+                            <span #renameMenuText>{{ 'worklist.item.menuData.rename' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="userProfile.roleReadWrite && case.caseDataReference?.canDeleteCase !== false"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + deleteMenuText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(deleteMenuText.textContent)"
+                        >
+                            <span #deleteMenuText>{{ 'worklist.item.menuData.delete' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="showRatingRecommendation"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + ratingRecommendationText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(ratingRecommendationText.textContent)"
+                        >
+                            <span #ratingRecommendationText>{{ 'worklist.item.menuData.ratingRecommendation' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="case.showAuthoring"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + authoringText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(authoringText.textContent)"
+                        >
+                            <span #authoringText>{{ 'worklist.item.menuData.authoring' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="
+                                case.caseDataReference?.lastSaveAndDownloadDate !== undefined &&
+                                this.isCommitteeWorkflow
+                            "
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + rcMenuText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(rcMenuText.textContent)"
+                        >
+                            <span #rcMenuText>{{ 'worklist.item.menuData.ratingCommittee' | translate }}</span>
+                        </button>
+                    </li>
+                </ul>
+            </blue-popover>
+        </blue-card-content>
+    </blue-card>
+</ng-container>
