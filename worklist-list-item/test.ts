@@ -1,400 +1,136 @@
-import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-
-import { BlueModalRef, BluePopoverAnchor } from '@moodys/blue-ng';
-import { Case, CasesActions } from '../../types/case';
-import { MenuData } from '../../types/enums/worklist.enums';
-
-import { DataService } from 'src/app/shared/services/data.service';
-import { ModalEvent } from '../../types/modalEvent';
-import { Router } from '@angular/router';
-import { AppRoutes } from 'src/app/routes/routes';
-import { EntityService } from 'src/app/shared/services/entity.service';
-import { EntityFamilyNode } from 'src/app/shared/models/EntityFamilyNode';
-import { RatingRecommendationService } from 'src/app/features/rating-recommendation/services/rating-recommendation.service';
-import { RatingTemplate } from 'src/app/shared/models/RatingTemplate';
-import { EntityType } from 'src/app/shared/models/EntityType';
-import { Entity } from 'src/app/shared/models/Entity';
-import { concatMap, filter, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
-
-import { ContentLoaderService } from 'src/app/shared/services/content-loader.service';
-import { AnalystRole } from 'src/app/shared/models/AnalystRole';
-import {
-    RatingRecommendationTableView,
-    RatingsTableMode
-} from '../../../features/rating-recommendation/enums/rating-recommendation.enum';
-import { CaseData } from '../../../shared/types/case-data';
-import { CasesService, CaseStatus } from '../../../shared/services/cases';
-import { Subject } from 'rxjs';
-import { generateKey, Rating } from '../../../features/rating-recommendation';
-import { UltimateParent } from '../../../shared/models/UltimateParent';
-import { RatingGroupType } from 'src/app/shared/models/RatingGroupType';
-import { UserProfileService } from '../../../shared/services/user-profile-service';
-import { TranslateService } from '@ngx-translate/core';
-import { UserProfile } from '@app/shared/models/UserProfile';
-import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
-
-@Component({
-    selector: 'app-worklist-list-item',
-    templateUrl: './worklist-list-item.component.html',
-    styleUrls: ['./worklist-list-item.component.scss']
-})
-export class WorklistListItemComponent implements OnInit, OnDestroy {
-    @Input()
-    case: Case;
-    @Input()
-    menuData: Record<'text', string>[] = [];
-    @Input()
-    userProfile: UserProfile;
-
-    modalRef: BlueModalRef;
-
-    modalData: ModalEvent = {
-        caseName: '',
-        caseId: '',
-        event: null
-    };
-
-    @Output()
-    caseEvent = new EventEmitter<ModalEvent>();
-
-    selectedCaseAction?: CasesActions;
-
-    unSubscribe$ = new Subject<void>();
-
-    actionRoutes: Record<string, AppRoutes> = {
-        [CasesActions.CreateFromExisting]: AppRoutes.SELECT_RATING_GROUP_AND_TEMPLATE,
-        [CasesActions.EditCase]: AppRoutes.ENTITY_SELECTION
-    };
-
-    ratingGroupWithNoFamilyTree: Record<RatingGroupType.SFGPrimary | RatingGroupType.SFGCoveredBonds, boolean> = {
-        [RatingGroupType.SFGCoveredBonds]: true,
-        [RatingGroupType.SFGPrimary]: true
-    };
-
-    selectedCaseEntityDictionary: Record<string, Rating> = {};
-
-    @ViewChild(BluePopoverAnchor) bluePopOverElement: BluePopoverAnchor;
-
-    userProfile$ = this.userProfileService.userProfile$.pipe(
-        filter((userProfile) => !!userProfile),
-        map((userProfile) => {
-            return {
-                createdBy: `${userProfile.firstName} ${userProfile.lastName}`,
-                lastModifiedBy: `${userProfile.firstName} ${userProfile.lastName}`
-            };
-        })
-    );
-
-    menuIncludeRatingCommittee = false;
-    isCommitteeWorkflow = false;
-    showRatingRecommendation = false;
-    
-    constructor(
-        private dataService: DataService,
-        private router: Router,
-        private entityService: EntityService,
-        private ratingRecommendationService: RatingRecommendationService,
-        public casesService: CasesService,
-        private contentLoaderService: ContentLoaderService,
-        private userProfileService: UserProfileService,
-        public translate: TranslateService,
-        public featureFlagService: FeatureFlagService
-    ) {
-        this.isCommitteeWorkflow =
-            this.featureFlagService.isCommitteeWorkflowEnabled() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledFIG() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledCFG();
-    }
-
-    openModal(value: string) {
-        /* TODO REFACTOR CODE*/
-        if (value === 'Rename Case') {
-            this.modalData.event = MenuData.rename;
-            this.modalData.caseName = this.case.name;
-            this.modalData.caseId = this.case.id;
-            this.caseEvent.emit(this.modalData);
-        } else if (value === 'Delete Case') {
-            this.modalData.event = MenuData.delete;
-            this.modalData.caseId = this.case.id;
-            this.caseEvent.emit(this.modalData);
-        } else if (value == 'Create New From Existing') {
-            /*TODO GET VALUE FROM PROPS*/
-            this.selectedCaseAction = CasesActions.CreateFromExisting;
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode: RatingsTableMode.CreateNewRecommendationFromExisting,
-                ratingsDetails: null
-            });
-            this.goToEntitySelection();
-        } else if (value === 'Rating Committee') {
-            this.navigateToInviteesPage();
-        } else if (value === 'Authoring') {
-            this.navigateToAuthoringPage();
-        } else if (value === 'Rating Recommendation') {
-            this.navigateToRatingRecommendationPage();
-        }
-    }
-
-    goToEntitySelection() {
-        this.dataService.createNewFromExisting = true;
-        this.case.caseDataReference.id = '';
-        this.dataService.isExistingCase = true;
-        this.prepareTransition();
-    }
-
-    prepareTransition() {
-        this.clearEntity();
-        this.createCommitteeSupport();
-        this.dataService.updateRatingGroupSelection(this.dataService.committeSupportWrapper.ratingGroupTemplate);
-        this.dataService.setSelectedJurisdiction();
-        this.selectTemplateType();
-        if (this.ratingGroupWithNoFamilyTree[this.dataService.committeSupportWrapper.ratingGroupTemplate]) {
-            this.populateSFGEntities();
-        } else {
-            this.populateEntityForBasket();
-        }
-    }
-
-    openExistingCase() {
-        this.createCurrentEntityDictionary();
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-        });
-        this.selectedCaseAction = CasesActions.EditCase;
-        this.dataService.isExistingCase = true;
-        this.prepareTransition();
-    }
-
-    populateSFGEntities() {
-        this.contentLoaderService.show();
-        this.setEntityFamilyList();
-        this.dataService.manageCaseDetails(
-            CaseStatus.Initiated,
-            this.dataService.committeSupportWrapper.entities[0]?.name
-        );
-        this.casesService
-            .updateCase(this.dataService.committeSupportWrapper)
-            .pipe(
-                filter(() => this.selectedCaseAction === CasesActions.EditCase),
-                finalize(() => {
-                    this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
-                }),
-                takeUntil(this.unSubscribe$)
-            )
-            .subscribe();
-    }
-
-    populateEntityForBasket() {
-        this.contentLoaderService.show();
-        this.entityService
-            .getUltimateParents(this.case.caseDataReference.entities)
-            .pipe(
-                tap((ultimateParentEntity) => this.setUltimateParent(ultimateParentEntity)),
-                filter(() => this.selectedCaseAction === CasesActions.CreateFromExisting),
-                switchMap(() =>
-                    this.dataService.manageCaseDetails(
-                        CaseStatus.Initiated,
-                        this.entityService.selectedOrgTobeImpacted[0]?.name
-                    )
-                ),
-                concatMap((committeeSupportWrapper) => this.casesService.createCase(committeeSupportWrapper)),
-                tap((caseResp) => this.dataService.setCaseId(caseResp.id)),
-                finalize(() => {
-                    this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
-                }),
-                takeUntil(this.unSubscribe$)
-            )
-            .subscribe();
-    }
-
-    setEntityFamilyList() {
-        const entityFamilyNode: EntityFamilyNode[] = [];
-        this.case.caseDataReference.entities.forEach((element) => {
-            const entityFamily = new EntityFamilyNode(element);
-            const leadAnalyst = element.analysts?.find((analyst) => analyst.role === AnalystRole.leadAnalyst).analyst;
-            entityFamily.leadAnalyst?.push(leadAnalyst);
-            entityFamilyNode.push(entityFamily);
-        });
-        this.entityService.addOrgToImpactedList(entityFamilyNode, true);
-    }
-
-    setUltimateParent(ultimateParentEntity: UltimateParent[]) {
-        const entityFamilyNode: EntityFamilyNode[] = [];
-        this.case.caseDataReference.entities.forEach((selectedEntity) => {
-            const entityFamily = new EntityFamilyNode(selectedEntity);
-            const currentUltimateParentEntity = ultimateParentEntity.find((parent) => selectedEntity.id == parent.id);
-
-            if (!currentUltimateParentEntity) return;
-            const isOrganization = currentUltimateParentEntity.type === EntityType.Organization;
-            const ultimateParent = new Entity({
-                id: currentUltimateParentEntity.ultimateParent.id,
-                name: currentUltimateParentEntity.ultimateParent.name,
-                type: isOrganization ? EntityType.Organization : EntityType.Deal,
-                analysts: null,
-                rated: selectedEntity.rated
-            } as Entity);
-            entityFamily.ultimateParent = new EntityFamilyNode(ultimateParent);
-
-            const leadAnalyst = selectedEntity.analysts?.find(
-                (analyst) => analyst.role === AnalystRole.leadAnalyst
-            ).analyst;
-            entityFamily.leadAnalyst?.push(leadAnalyst);
-            entityFamilyNode.push(entityFamily);
-        });
-        this.entityService.addOrgToImpactedList(entityFamilyNode, true);
-    }
-
-    selectTemplateType() {
-        if (this.case.caseDataReference.actionRequestForm && this.case.caseDataReference.ratingCommitteeMemo) {
-            this.dataService.selectedTemplateType = RatingTemplate.ArfRcm;
-        } else if (this.case.caseDataReference.actionRequestForm) {
-            this.dataService.selectedTemplateType = RatingTemplate.Arf;
-        } else {
-            this.dataService.selectedTemplateType = RatingTemplate.Rcm;
-        }
-    }
-
-    createCommitteeSupport() {
-        this.dataService.committeSupportWrapper = this.dataService.committeSupportWrapper.createFromCase(
-            this.generateCreateCaseData()
-        );
-    }
-
-    generateCreateCaseData(): CaseData {
-        const { ratingCommitteeInfo, committeeMemoSetup } = this.case.caseDataReference;
-        const { conflictCheckId, ...excludeConflictCheckId } = committeeMemoSetup;
-        const { expected, ...excludeExpected } = ratingCommitteeInfo;
-
-        const caseData: CaseData = {
-            ...this.case.caseDataReference,
-            ratingCommitteeInfo: excludeExpected,
-            committeeMemoSetup: excludeConflictCheckId
-        };
-        /*TODO REFACTOR THIS CODE */
-        if (this.selectedCaseAction === CasesActions.CreateFromExisting) {
-            caseData.pressReleaseDisclosures.purposesOfAction = [];
-            caseData.pressReleaseDisclosures.newlyIssuedInstrument = null;
-            caseData.pressReleaseDisclosures.ratingActionDueTolookBackReview = null;
-            caseData.pressReleaseDisclosures.esgFactorsKeyDrivers = null;
-            caseData.pressReleaseDisclosures.relevantESGFactors = [];
-            caseData.pressReleaseDisclosures.withdrawalReasons = [];
-            caseData.pressReleaseDisclosures.accuRateInformations = [];
-
-            caseData.regulatoryDisclosures.qualityOfInformationQuestion = null;
-            caseData.regulatoryDisclosures.qualityOfInformationOptions = [];
-            caseData.regulatoryDisclosures.qualityOfInfoUnderReviewOption = null;
-            caseData.regulatoryDisclosures.informationDisclosureSFOnly = null;
-            caseData.regulatoryDisclosures.reasonForReviewAction = [];
-
-            caseData.committeeMemoSetup.keyFactualElements = [];
-
-            caseData.ratingCommitteeInfo.number = null;
-            caseData.ratingCommitteeInfo.closingDate = null;
-
-            caseData.committeeMemoSetup.lgdModelUsed = undefined;
-            caseData.committeeMemoSetup.crsCrmVerified = undefined;
-            caseData.committeeMemoSetup.insuranceScoreUsed = undefined;
-
-            caseData.caseId = this.dataService.generateCaseId();
-        }
-        return this.selectedCaseAction === CasesActions.EditCase ? this.case.caseDataReference : caseData;
-    }
-
-    clearEntity() {
-        this.entityService.clearEntityFamilyData();
-        this.entityService.clearSelectedOrgsInCart();
-        this.dataService.clearCommitteeSetupPage();
-    }
-
-    ngOnInit() {
-        // Check for proposed ratings for authoring feature
-        const hasProposedRating = this.case.caseDataReference?.entities?.some((entity) =>
-            entity.ratingClasses?.some((ratingClass) =>
-                ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
-            )
-        );
-        
-        // Check for rating recommendation - enable if saved or downloaded
-        this.showRatingRecommendation = this.case.caseDataReference?.lastSaveAndDownloadDate !== undefined;
-        
-        const isRatingCommitteeWorkflow =
-            (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
-        
-        this.case.showAuthoring =
-            hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
-    }
-
-    isRatingCommitteeWorkflowEnabledSOV() {
-        return (
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SubSovereign ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignBond ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignMDB
-        );
-    }
-    isRatingCommitteeWorkflowEnabledFIG() {
-        return (
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.BankingFinanceSecurities ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.NonBanking
-        );
-    }
-    isRatingCommitteeWorkflowEnabledCFG() {
-        return this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.CFG;
-    }
-
-    ngOnDestroy() {
-        this.unSubscribe$.next();
-        this.unSubscribe$.complete();
-    }
-
-    private createCurrentEntityDictionary() {
-        for (const entity of this.case.caseDataReference.entities) {
-            const debt = entity.debts ?? [];
-            const ratingClass = entity.ratingClasses ?? [];
-            this.buildDictionary(entity.id, ratingClass, RatingRecommendationTableView.Class);
-            this.buildDictionary(entity.id, debt, RatingRecommendationTableView.Debt);
-        }
-    }
-
-    private buildDictionary<T extends { ratings: Rating[]; id: string }>(
-        entityId: string,
-        ratings: T[],
-        ratingType: RatingRecommendationTableView
-    ): void {
-        for (const parentRating of ratings) {
-            for (const rating of parentRating.ratings) {
-                const key =
-                    ratingType === RatingRecommendationTableView.Class
-                        ? generateKey(entityId, rating.identifier)
-                        : generateKey(entityId, parentRating.id, rating.identifier);
-                this.selectedCaseEntityDictionary[key] = rating;
-            }
-        }
-    }
-
-    private navigateToInviteesPage() {
-        this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`)
-            .then(() => {
-                this.contentLoaderService.hide();
-            });
-    }
-
-    private navigateToAuthoringPage() {
-        this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`)
-            .then(() => {
-                this.contentLoaderService.hide();
-            });
-    }
-    
-    private navigateToRatingRecommendationPage() {
-        this.contentLoaderService.show();
-        this.openExistingCase(); // This will redirect to the rating recommendation table page
-    }
-}
+<ng-container *ngIf="userProfile$ | async as userDetails">
+    <blue-card class="card-margin" [attr.data-testid]="'caseId_' + case.id">
+        <!--how to apply font bliss pro and sans serif-->
+        <blue-card-content class="case">
+            <div class="w-1/2">
+                <div class="case-meta">
+                    <div class="case-meta-title">{{ 'worklist.item.tableHeaders.caseName' | translate }}</div>
+                </div>
+                <div class="case-data">
+                    <div class="case-data-set break-all">
+                        <a
+                            (click)="openExistingCase()"
+                            class="case-data-set-name"
+                            title="{{ case.name }}"
+                            href="javascript:void(0)"
+                        >
+                            {{ case.name }}
+                        </a>
+                        <br />
+                        <div class="case-data-set-info">Case ID: {{ case.caseId }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="w-1/12">
+                <div class="case-meta">
+                    <div class="case-meta-title-space">
+                        {{ 'worklist.item.tableHeaders.camsId' | translate }}
+                    </div>
+                </div>
+                <div class="type">
+                    {{ case.caseDataReference?.committeeMemoSetup?.conflictCheckId ?? '-' }}
+                </div>
+            </div>
+            <div class="w-1/12">
+                <div class="case-meta">
+                    <div class="case-meta-title">
+                        {{ 'worklist.item.tableHeaders.type' | translate }}
+                    </div>
+                </div>
+                <div class="type">
+                    <blue-pill *ngFor="let type of case.caseTypes" class="pill-margin">
+                        {{ type }}
+                    </blue-pill>
+                </div>
+            </div>
+            <div class="case-width">
+                <div class="case-meta">
+                    <div class="case-meta-title">
+                        {{ 'worklist.item.tableHeaders.lastModifiedBy' | translate }}
+                    </div>
+                </div>
+                <div class="case-data">
+                    <div class="case-data-set">
+                        {{ case.lastModifiedBy }}
+                    </div>
+                    <div class="case-data-date">
+                        {{ case.lastModifiedDate | date : 'dd MMM Y' }}
+                    </div>
+                </div>
+            </div>
+            <div class="case-width">
+                <div class="case-meta">
+                    <div class="case-meta-title">{{ 'worklist.item.tableHeaders.createdBy' | translate }}</div>
+                </div>
+                <div class="case-data">
+                    <div class="case-data-set">
+                        {{ case.createdBy }}
+                    </div>
+                    <div class="case-data-date">
+                        {{ case.createdDate | date : 'dd MMM Y' }}
+                    </div>
+                </div>
+            </div>
+            <button blueButton bluePopoverAnchor [popover]="menu2" class="button-link">
+                <svg blueIcon="more-vertical"></svg>
+            </button>
+            <blue-popover #menu2>
+                <ul blueMenu>
+                    <li>
+                        <button
+                            *ngIf="userProfile.roleReadWrite"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + renameMenuText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(renameMenuText.textContent)"
+                        >
+                            <span #renameMenuText>{{ 'worklist.item.menuData.rename' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="userProfile.roleReadWrite && case.caseDataReference?.canDeleteCase !== false"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + deleteMenuText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(deleteMenuText.textContent)"
+                        >
+                            <span #deleteMenuText>{{ 'worklist.item.menuData.delete' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="showRatingRecommendation"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + ratingRecommendationText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(ratingRecommendationText.textContent)"
+                        >
+                            <span #ratingRecommendationText>{{ 'worklist.item.menuData.ratingRecommendation' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="case.showAuthoring"
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + authoringText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(authoringText.textContent)"
+                        >
+                            <span #authoringText>{{ 'worklist.item.menuData.authoring' | translate }}</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button
+                            *ngIf="
+                                case.caseDataReference?.lastSaveAndDownloadDate !== undefined &&
+                                this.isCommitteeWorkflow
+                            "
+                            blueMenuItem
+                            [attr.data-testid]="'workListMenu_' + rcMenuText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(rcMenuText.textContent)"
+                        >
+                            <span #rcMenuText>{{ 'worklist.item.menuData.ratingCommittee' | translate }}</span>
+                        </button>
+                    </li>
+                </ul>
+            </blue-popover>
+        </blue-card-content>
+    </blue-card>
+</ng-container>
