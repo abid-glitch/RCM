@@ -87,8 +87,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
-    showRatingRecommendation = false;
-    
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -129,8 +127,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.navigateToInviteesPage();
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
-        } else if (value === 'Rating Recommendation') {
-            this.navigateToRatingRecommendationPage();
         }
     }
 
@@ -309,27 +305,15 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit() {
-        // Check for proposed ratings for authoring feature
         const hasProposedRating = this.case.caseDataReference?.entities?.some((entity) =>
             entity.ratingClasses?.some((ratingClass) =>
                 ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
             )
         );
-        
-        // Check if case has entities - this is the only condition we need for rating recommendation
-        const hasEntities = this.case.caseDataReference?.entities?.length > 0;
-        
-        // Show rating recommendation whenever there are entities in the case
-        this.showRatingRecommendation = hasEntities;
-        
-        // Log for debugging
-        console.log(`Case ${this.case.id}: Has entities: ${hasEntities}, Show Rating Recommendation: ${this.showRatingRecommendation}`);
-        
         const isRatingCommitteeWorkflow =
             (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
-        
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
     }
@@ -357,7 +341,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     private createCurrentEntityDictionary() {
-        this.selectedCaseEntityDictionary = {};
         for (const entity of this.case.caseDataReference.entities) {
             const debt = entity.debts ?? [];
             const ratingClass = entity.ratingClasses ?? [];
@@ -399,45 +382,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 this.contentLoaderService.hide();
             });
     }
-    
-    private navigateToRatingRecommendationPage() {
-        this.contentLoaderService.show();
-        
-        try {
-            console.log('Navigating to Rating Recommendation Page for case:', this.case.id);
-            
-            // Create entity dictionary to pass to the rating recommendation service
-            this.createCurrentEntityDictionary();
-            
-            // Set up the rating recommendation service with the current entity data
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode: RatingsTableMode.EditRecommendation,
-                ratingsDetails: this.selectedCaseEntityDictionary
-            });
-            
-            // Ensure we're using the right AppRoutes constant
-            console.log('Navigation path:', `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`);
-            
-            // Navigate directly to the rating recommendation page
-            this.router
-                .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
-                .then(() => {
-                    console.log('Navigation successful');
-                    this.contentLoaderService.hide();
-                })
-                .catch(error => {
-                    console.error('Navigation error:', error);
-                    this.contentLoaderService.hide();
-                    
-                    // Fallback navigation to ensure we go somewhere if the direct route fails
-                    this.openExistingCase();
-                });
-        } catch (error) {
-            console.error('Error in rating recommendation navigation:', error);
-            this.contentLoaderService.hide();
-            
-            // Fallback to original behavior
-            this.openExistingCase();
-        }
-    }
 }
+
+
