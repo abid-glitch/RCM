@@ -391,16 +391,34 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         console.log('Navigating to Rating Recommendation');
         this.contentLoaderService.show();
         
-        try {
-            // Try direct navigation without any preprocessing
-            const url = `/${AppRoutes.CASE}/${this.case.id}/rating-recommendation`;
-            console.log('Navigating to URL:', url);
-            
-            // Try all possible navigation methods
-            window.location.href = url;
-        } catch (error) {
-            console.error('Navigation failed:', error);
-            this.contentLoaderService.hide();
-        }
+        // Store the data in a service that persists through navigation
+        this.createCurrentEntityDictionary();
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: this.selectedCaseEntityDictionary
+        });
+
+        // Add a delay before navigation to ensure data is set
+        setTimeout(() => {
+            try {
+                // Use the casesService.router with new options to prevent redirection
+                this.casesService.router.navigate(
+                    [`${AppRoutes.CASE}/${this.case.id}/rating-recommendation`], 
+                    { 
+                        skipLocationChange: false,
+                        replaceUrl: false
+                    }
+                ).then(() => {
+                    // Keep the loader active longer to ensure navigation completes
+                    setTimeout(() => this.contentLoaderService.hide(), 1000);
+                }).catch(err => {
+                    console.error('Navigation error:', err);
+                    this.contentLoaderService.hide();
+                });
+            } catch (error) {
+                console.error('Navigation setup failed:', error);
+                this.contentLoaderService.hide();
+            }
+        }, 500); // Short delay to ensure state is set
     }
 }
