@@ -87,6 +87,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
+    // Flag to determine if Rating Recommendation should be shown
+    showRatingRecommendation = false;
+    
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -127,6 +130,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.navigateToInviteesPage();
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
+        } else if (value === 'Rating Recommendation') {
+            this.navigateToRatingRecommendationPage();
         }
     }
 
@@ -305,17 +310,36 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     ngOnInit() {
+        // Check if any entity has a proposed rating
         const hasProposedRating = this.case.caseDataReference?.entities?.some((entity) =>
             entity.ratingClasses?.some((ratingClass) =>
                 ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
             )
         );
+        
+        // Check if rating recommendation was saved
+        // This flag should come from your data store or service
+        this.checkRatingRecommendationSaved();
+        
         const isRatingCommitteeWorkflow =
             (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
+    }
+
+    // Method to check if rating recommendation was saved
+    checkRatingRecommendationSaved() {
+        // You need to implement this based on your application's state management
+        // This could check a flag in the case data, or a service that tracks saves
+        
+        // Example implementation (replace with your actual logic):
+        this.ratingRecommendationService.getRatingRecommendationSaved(this.case.id)
+            .pipe(takeUntil(this.unSubscribe$))
+            .subscribe(saved => {
+                this.showRatingRecommendation = saved;
+            });
     }
 
     isRatingCommitteeWorkflowEnabledSOV() {
@@ -382,6 +406,18 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 this.contentLoaderService.hide();
             });
     }
+    
+    // Add method to navigate to Rating Recommendation page
+    private navigateToRatingRecommendationPage() {
+        this.contentLoaderService.show();
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: null
+        });
+        this.casesService.router
+            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
+            .then(() => {
+                this.contentLoaderService.hide();
+            });
+    }
 }
-
-
