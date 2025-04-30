@@ -104,6 +104,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     openModal(value: string) {
+        console.log('openModal called with value:', value); // Debug log
         /* TODO REFACTOR CODE*/
         if (value === 'Rename Case') {
             this.modalData.event = MenuData.rename;
@@ -126,8 +127,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.navigateToInviteesPage();
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
-        } else if (value === 'Rating Recommendation') {
-            this.navigateToRatingRecommendationPage();
+        } else if (value === 'Rating Recommendation' || value === 'Rating Recommendations') {
+            console.log('Rating Recommendation option selected'); // Debug log
+            this.navigateToRatingRecommendation();
         }
     }
 
@@ -384,27 +386,21 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
 
-    // New method for navigating to the Rating Recommendation page
-    private navigateToRatingRecommendationPage() {
+    // Direct method for navigating to Rating Recommendation
+    private navigateToRatingRecommendation() {
+        console.log('Navigating to Rating Recommendation');
         this.contentLoaderService.show();
-        this.createCurrentEntityDictionary();
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-        });
         
-        // Try using the casesService.router for consistency with other navigation methods
-        this.casesService.router
-            .navigate([AppRoutes.CASE, this.case.id, AppRoutes.RATING_RECOMMENDATION], { replaceUrl: true })
-            .then(() => {
-                this.contentLoaderService.hide();
-            })
-            .catch(error => {
-                console.error('Navigation error:', error);
-                this.contentLoaderService.hide();
-                
-                // Fallback approach if the first method fails
-                window.location.href = `/${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-            });
+        try {
+            // Try direct navigation without any preprocessing
+            const url = `/${AppRoutes.CASE}/${this.case.id}/rating-recommendation`;
+            console.log('Navigating to URL:', url);
+            
+            // Try all possible navigation methods
+            window.location.href = url;
+        } catch (error) {
+            console.error('Navigation failed:', error);
+            this.contentLoaderService.hide();
+        }
     }
 }
