@@ -98,7 +98,7 @@
                     </li>
                     <li>
                         <button
-                            *ngIf="showRatingRecommendation"
+                            *ngIf="case.caseDataReference?.entities?.length > 0"
                             blueMenuItem
                             [attr.data-testid]="'workListMenu_' + ratingRecommendationText.textContent"
                             (click)="bluePopOverElement.closePopover(); openModal(ratingRecommendationText.textContent)"
