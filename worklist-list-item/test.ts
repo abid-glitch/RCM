@@ -79,8 +79,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         filter((userProfile) => !!userProfile),
         map((userProfile) => {
             return {
-                createdBy: `${userProfile.firstName} ${userProfile.lastName}`,
-                lastModifiedBy: `${userProfile.firstName} ${userProfile.lastName}`
+                createdBy: ${userProfile.firstName} ${userProfile.lastName},
+                lastModifiedBy: ${userProfile.firstName} ${userProfile.lastName}
             };
         })
     );
@@ -130,12 +130,32 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.navigateToAuthoringPage();
         }
         else if (value == 'Rating Recommendation'){
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode : RatingsTableMode.NewRecommendation, 
-                ratingsDetails : null
-            });
-            this.router.navigate([AppRoutes.RATING_RECOMMENDATION])
+            this.navigateToRatingRecommendationPage();
         }
+    }
+
+    navigateToRatingRecommendationPage() {
+        this.contentLoaderService.show();
+        // Create entity dictionary to pass to the rating recommendation page
+        this.createCurrentEntityDictionary();
+        
+        // Set up the table mode with the current case data
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: this.selectedCaseEntityDictionary
+        });
+        
+        // Set case data in the data service
+        this.dataService.isExistingCase = true;
+        this.dataService.committeSupportWrapper = this.dataService.committeSupportWrapper.createFromCase(
+            this.case.caseDataReference
+        );
+        
+        // Navigate to the rating recommendation page
+        this.router.navigate([AppRoutes.CASE, this.case.id, AppRoutes.RATING_RECOMMENDATION])
+            .then(() => {
+                this.contentLoaderService.hide();
+            });
     }
 
     goToEntitySelection() {
@@ -350,6 +370,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     private createCurrentEntityDictionary() {
+        this.selectedCaseEntityDictionary = {}; // Reset the dictionary
         for (const entity of this.case.caseDataReference.entities) {
             const debt = entity.debts ?? [];
             const ratingClass = entity.ratingClasses ?? [];
@@ -377,7 +398,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     private navigateToInviteesPage() {
         this.contentLoaderService.show();
         this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`)
+            .navigateByUrl(${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES})
             .then(() => {
                 this.contentLoaderService.hide();
             });
@@ -386,11 +407,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     private navigateToAuthoringPage() {
         this.contentLoaderService.show();
         this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`)
+            .navigateByUrl(${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY})
             .then(() => {
                 this.contentLoaderService.hide();
             });
     }
 }
-
-
