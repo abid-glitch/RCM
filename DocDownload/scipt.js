@@ -1,33 +1,30 @@
 <script>
-    function downloadDoc() {
-        const form = document.getElementById("docForm");
-        const formData = new FormData(form);
+document.getElementById('downloadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
 
-        const params = new URLSearchParams();
-        for (const [key, value] of formData.entries()) {
-            params.append(key, value);
-        }
+    const name = document.getElementById('name').value;
+    const email = document.getElementById('email').value;
+    const phone = document.getElementById('phone').value;
 
-        fetch("/api/download?" + params.toString(), {
-            method: "GET"
-        })
-        .then(response => {
-            if (!response.ok) throw new Error("Download failed");
+    const params = new URLSearchParams({ name, email, phone });
 
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "document.docx";
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-        })
-        .catch(err => {
-            alert("Error: " + err.message);
-        });
+    const response = await fetch('/api/download?' + params.toString(), {
+        method: 'GET'
+    });
+
+    if (!response.ok) {
+        alert('Error generating document');
+        return;
     }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "document.docx";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+});
 </script>
