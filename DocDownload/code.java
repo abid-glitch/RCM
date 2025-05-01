@@ -1,39 +1,4 @@
-// pom.xml dependencies (add these to your existing pom.xml)
-<!--
-<dependencies>
-    <!-- Spring Boot Starters -->
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-thymeleaf</artifactId>
-    </dependency>
-    
-    <!-- Apache POI for Word document manipulation -->
-    <dependency>
-        <groupId>org.apache.poi</groupId>
-        <artifactId>poi-ooxml</artifactId>
-        <version>5.2.3</version>
-    </dependency>
-</dependencies>
--->
-
-// src/main/java/com/example/worddocument/WordDocumentApplication.java
-package com.example.worddocument;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class WordDocumentApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(WordDocumentApplication.class, args);
-    }
-}
-
-// src/main/java/com/example/worddocument/controller/DocumentController.java
+// src/main/java/com/example/worddocument/controller/AutoDownloadController.java
 package com.example.worddocument.controller;
 
 import com.example.worddocument.service.WordDocumentService;
@@ -42,37 +7,38 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.io.ByteArrayOutputStream;
+import java.util.logging.Logger;
 
-@Controller
-public class DocumentController {
+@RestController
+public class AutoDownloadController {
+    
+    private static final Logger logger = Logger.getLogger(AutoDownloadController.class.getName());
 
     @Autowired
     private WordDocumentService wordDocumentService;
 
     @GetMapping("/")
-    public String index() {
-        return "index";
-    }
-
-    @PostMapping("/download")
-    public ResponseEntity<ByteArrayResource> downloadDocument(
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) String email,
-            @RequestParam(required = false) String phone) {
+    public ResponseEntity<ByteArrayResource> autoDownloadDocument() {
+        logger.info("Auto-downloading document...");
         
         try {
+            // Default values for the document
+            String name = "Default User";
+            String email = "user@example.com";
+            String phone = "123-456-7890";
+            
             ByteArrayOutputStream outputStream = wordDocumentService.generateDocument(name, email, phone);
             
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=document.docx");
             
             ByteArrayResource resource = new ByteArrayResource(outputStream.toByteArray());
+            
+            logger.info("Document generated successfully with size: " + outputStream.size());
             
             return ResponseEntity.ok()
                     .headers(headers)
@@ -81,6 +47,7 @@ public class DocumentController {
                     .body(resource);
                     
         } catch (Exception e) {
+            logger.severe("Error generating document: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.internalServerError().build();
         }
@@ -229,7 +196,16 @@ public class WordDocumentService {
     
     private void applyDocumentProtection(XWPFDocument document) {
         // Apply protection to only allow editing of form fields
-        CTDocProtect docProtect = document.getDocument().addNewDocumentProtection();
+        CTDocument1 ctDocument = document.getDocument();
+        CTDocProtect docProtect;
+        
+        // Check if document protection already exists
+        if (ctDocument.isSetDocumentProtection()) {
+            docProtect = ctDocument.getDocumentProtection();
+        } else {
+            docProtect = ctDocument.addNewDocumentProtection();
+        }
+        
         docProtect.setEdit(STDocProtect.FORMS);
         docProtect.setFormatting(false);
         docProtect.setEnforcement(true);
@@ -242,76 +218,24 @@ public class WordDocumentService {
     }
 }
 
-// src/main/resources/templates/index.html
-<!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <title>Word Document Generator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        .container {
-            border: 1px solid #ddd;
-            padding: 20px;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Generate Word Document</h1>
-        <p>Fill in the optional information below and click "Save & Download" to generate a document with both editable and non-editable sections.</p>
-        
-        <form action="/download" method="post">
-            <div class="form-group">
-                <label for="name">Name:</label>
-                <input type="text" id="name" name="name" placeholder="Enter your name">
-            </div>
-            
-            <div class="form-group">
-                <label for="email">Email:</label>
-                <input type="text" id="email" name="email" placeholder="Enter your email">
-            </div>
-            
-            <div class="form-group">
-                <label for="phone">Phone:</label>
-                <input type="text" id="phone" name="phone" placeholder="Enter your phone number">
-            </div>
-            
-            <button type="submit">Save & Download</button>
-        </form>
-    </div>
-</body>
-</html>
+// src/main/resources/application.properties
+# Server configuration
+server.port=8080
+
+# Debugging configuration
+logging.level.org.springframework.web=DEBUG
+logging.level.com.example=DEBUG
+logging.level.root=INFO
+
+# Disable Whitelabel error page
+server.error.whitelabel.enabled=false
+server.error.include-stacktrace=always
+server.error.include-message=always
+
+# Content type configuration
+spring.mvc.contentnegotiation.favor-parameter=true
+spring.mvc.contentnegotiation.media-types.docx=application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+# Maximum file upload size
+spring.servlet.multipart.max-file-size=10MB
+spring.servlet.multipart.max-request-size=10MB
