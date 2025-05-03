@@ -87,6 +87,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
+    isshowRatingRecommendation = true;
+    showRatingRecommendationOption = false;
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -128,6 +130,11 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
         }
+
+        else if (value === 'Rating Recommendation'){
+            this.navigateToRatingRecommendationPage();
+        }
+        
     }
 
     goToEntitySelection() {
@@ -136,6 +143,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.dataService.isExistingCase = true;
         this.prepareTransition();
     }
+
 
     prepareTransition() {
         this.clearEntity();
@@ -266,7 +274,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         const caseData: CaseData = {
             ...this.case.caseDataReference,
             ratingCommitteeInfo: excludeExpected,
-            committeeMemoSetup: excludeConflictCheckId
+            committeeMemoSetup: excludeConflictCheckId,
         };
         /*TODO REFACTOR THIS CODE */
         if (this.selectedCaseAction === CasesActions.CreateFromExisting) {
@@ -310,12 +318,19 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
             )
         );
+
+        // this.showRatingRecommendation = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
         const isRatingCommitteeWorkflow =
             (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
+
+        // this.case.showRatingRecommendation = hasProposedRating && (this.case.caseDataReference.case === CaseStatus.InProgress || this.case.status === CaseStatus.Completed)
+        this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
+
+
     }
 
     isRatingCommitteeWorkflowEnabledSOV() {
@@ -382,4 +397,15 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 this.contentLoaderService.hide();
             });
     }
-}
+
+    private navigateToRatingRecommendationPage(){
+        this.contentLoaderService.show();
+        this.casesService.router
+        .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
+        .then(() => {
+            this.contentLoaderService.hide();
+        })
+
+    }}
+
+
