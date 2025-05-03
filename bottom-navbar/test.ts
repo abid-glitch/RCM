@@ -65,14 +65,19 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
     public isJapaneseDisclosureApplicable: boolean;
     userProfile$: Observable<UserProfile>;
-    readonly isRatingCommitteeWorkflow = true;
-    isCommitteeWorkflow = true;
+    readonly isRatingCommitteeWorkflow = true
+        // this.ratingRecommendationService.getCurrentRatingGroupTemplate() === RatingGroupType.SubSovereign ||
+        // this.ratingRecommendationService.getCurrentRatingGroupTemplate() === RatingGroupType.SovereignBond ||
+        // this.ratingRecommendationService.getCurrentRatingGroupTemplate() === RatingGroupType.SovereignMDB;
+    isCommitteeWorkflow = true
+        // this.featureFlagService.getTreatmentState(SplitTreatments.SOV) ||
+        // this.featureFlagService.getTreatmentState(SplitTreatments.SOV_MDB) ||
+        // this.featureFlagService.getTreatmentState(SplitTreatments.SUB_SOV);
 
     ratingRecommendation$ = this.ratingRecommendationService.ratingRecommendationsTableData$;
 
     continueClicked$ = new ReplaySubject<boolean>(1);
     isFinalized = this.dataService.committeSupportWrapper.isFinalized;
-    
     constructor(
         public entityService: EntityService,
         public dataService: DataService,
@@ -197,15 +202,12 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     onClickedSaveButton(): void {
         this.isSaveAction = true;
         this.loading$.next(true);
+        this.updateOrCreateNewCase(true);
+
+        // if(this.dataService.committeSupportWrapper && this.dataService.committeSupportWrapper.id){
+        //     localStorage.setItem(`case-${this.dataService.committeSupportWrapper.id}-saved`, 'true');
+        // }
         
-        // Set hasRatingRecommendation flag before updating the case
-        if (this.dataService.committeSupportWrapper) {
-            this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
-            this.dataService.committeSupportWrapper.lastSaveAndDownloadDate = new Date().toISOString();
-        }
-        
-        // Only update the case, don't navigate afterwards
-        this.updateOrCreateNewCase(true, CaseStatus.InProgress, false);
     }
 
     /*Manages saving current work progress*/
@@ -240,14 +242,15 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         return (
             this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGCoveredBonds ||
             this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGPrimary ||
+            // this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.ClosedEndFunds
             this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.NonBanking
         );
     }
 
-    /*Manages updating or creating new case contingent on if variable committeSupportWrapper has an id*/
-    updateOrCreateNewCase(saveButtonClicked = false, caseStatus: CaseStatus = CaseStatus.InProgress, shouldNavigate = true): void {
+    /*Manages u[dating or creating new case contingent on if variable committeSupportWrapper has an id*/
+    updateOrCreateNewCase(saveButtonClicked = false, caseStatus: CaseStatus = CaseStatus.InProgress): void {
         if (this.dataService.committeSupportWrapper?.id) {
-            this.updateCase(caseStatus, saveButtonClicked, shouldNavigate);
+            this.updateCase(caseStatus, saveButtonClicked);
         } else {
             this.createCase();
         }
@@ -272,8 +275,26 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
             .subscribe();
     }
 
-    /*Updates current case and navigates to next page only if shouldNavigate is true */
-    updateCase(caseStatus?: CaseStatus, saveButtonClicked = true, shouldNavigate = true): void {
+    generateCaseId() {
+        let caseId = '';
+        let dateTimeSecs = Date.now().toString();
+        dateTimeSecs =
+            dateTimeSecs.substring(0, 4) +
+            '-' +
+            dateTimeSecs.substring(4, 8) +
+            '-' +
+            dateTimeSecs.substring(8, 12) +
+            '-' +
+            dateTimeSecs.substring(12);
+
+        if (this.dataService.getUserProfiles().size > 0) {
+            caseId = this.dataService.getUserProfiles().keys().next().value.toUpperCase() + '-' + dateTimeSecs;
+        }
+        return caseId;
+    }
+
+    /*Updates current case and navigates to next page  */
+    updateCase(caseStatus?: CaseStatus, saveButtonClicked = true): void {
         combineLatest([
             this.ratingRecommendationService.selectedRatingViewBy$,
             this.ratingRecommendationService.selectedRatingRecommendationEntities$,
@@ -293,6 +314,8 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                             );
                         }
 
+
+
                         if (
                             viewBy === RatingRecommendationTableView.Debt &&
                             selectedRatingRecommendationEntities.DEBT
@@ -310,9 +333,7 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                         this.resetToHomePage();
                     } else {
                         this.processToastSaveButton(saveButtonClicked);
-                        if (shouldNavigate) {
-                            this.navigate();
-                        }
+                        this.navigate();
                     }
                 }),
                 finalize(() => {
