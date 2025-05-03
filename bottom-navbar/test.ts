@@ -204,9 +204,14 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         this.loading$.next(true);
         this.updateOrCreateNewCase(true);
 
-        if(this.dataService.committeSupportWrapper && this.dataService.committeSupportWrapper.id){
-            localStorage.setItem(`case-${this.dataService.committeSupportWrapper.id}-saved`, 'true');
+        // if(this.dataService.committeSupportWrapper && this.dataService.committeSupportWrapper.id){
+        //     localStorage.setItem(`case-${this.dataService.committeSupportWrapper.id}-saved`, 'true');
+        // }
+
+        if(this.dataService.committeSupportWrapper){
+            this.dataService.committeSupportWrapper.hasRatingRecommendation = true
         }
+        this.updateOrCreateNewCase(true);
     }
 
     /*Manages saving current work progress*/
