@@ -79,14 +79,15 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         filter((userProfile) => !!userProfile),
         map((userProfile) => {
             return {
-                createdBy: ${userProfile.firstName} ${userProfile.lastName},
-                lastModifiedBy: ${userProfile.firstName} ${userProfile.lastName}
+                createdBy: `${userProfile.firstName} ${userProfile.lastName}`,
+                lastModifiedBy: `${userProfile.firstName} ${userProfile.lastName}`
             };
         })
     );
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
+    isshowRatingRecommendation = true;
     showRatingRecommendationOption = false;
     constructor(
         private dataService: DataService,
@@ -129,13 +130,11 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
         }
-        else if (value == 'Rating Recommendation'){
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode : RatingsTableMode.NewRecommendation, 
-                ratingsDetails : null
-            });
-            this.router.navigate([AppRoutes.RATING_RECOMMENDATION])
+
+        else if (value === 'Rating Recommendation'){
+            this.navigateToRatingRecommendationPage();
         }
+        
     }
 
     goToEntitySelection() {
@@ -275,7 +274,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         const caseData: CaseData = {
             ...this.case.caseDataReference,
             ratingCommitteeInfo: excludeExpected,
-            committeeMemoSetup: excludeConflictCheckId
+            committeeMemoSetup: excludeConflictCheckId,
         };
         /*TODO REFACTOR THIS CODE */
         if (this.selectedCaseAction === CasesActions.CreateFromExisting) {
@@ -319,12 +318,20 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
             )
         );
+
+        // this.showRatingRecommendation = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
         const isRatingCommitteeWorkflow =
             (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
+
+        // this.case.showRatingRecommendation = hasProposedRating && (this.case.caseDataReference.case === CaseStatus.InProgress || this.case.status === CaseStatus.Completed)
+        // this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
+        this.showRatingRecommendationOption = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
+
+
     }
 
     isRatingCommitteeWorkflowEnabledSOV() {
@@ -377,7 +384,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     private navigateToInviteesPage() {
         this.contentLoaderService.show();
         this.casesService.router
-            .navigateByUrl(${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES})
+            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`)
             .then(() => {
                 this.contentLoaderService.hide();
             });
@@ -386,9 +393,26 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     private navigateToAuthoringPage() {
         this.contentLoaderService.show();
         this.casesService.router
-            .navigateByUrl(${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY})
+            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`)
             .then(() => {
                 this.contentLoaderService.hide();
             });
     }
-}
+
+    private navigateToRatingRecommendationPage(){
+        this.contentLoaderService.show();
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: null
+        });
+        this.createCurrentEntityDictionary();
+        //  this.ratingRecommendationService.setRatingRecommendationViewType(RatingRecommendationTableView.Class);
+        this.casesService.router
+        .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
+        .then(() => {
+            this.contentLoaderService.hide();
+        })
+
+    }}
+
+
