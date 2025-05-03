@@ -87,8 +87,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
-    isshowRatingRecommendation = true;
-    showRatingRecommendationOption = false;
+    // isshowRatingRecommendation = true;
+    showRatingRecommendationOption = true;
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -327,9 +327,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
 
-        // this.case.showRatingRecommendation = hasProposedRating && (this.case.caseDataReference.case === CaseStatus.InProgress || this.case.status === CaseStatus.Completed)
+        this.case.showRatingRecommendation = hasProposedRating 
         // this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
-        this.showRatingRecommendationOption = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
 
 
     }
