@@ -1,9 +1,7 @@
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-
 import { BlueModalRef, BluePopoverAnchor } from '@moodys/blue-ng';
 import { Case, CasesActions } from '../../types/case';
 import { MenuData } from '../../types/enums/worklist.enums';
-
 import { DataService } from 'src/app/shared/services/data.service';
 import { ModalEvent } from '../../types/modalEvent';
 import { Router } from '@angular/router';
@@ -15,7 +13,6 @@ import { RatingTemplate } from 'src/app/shared/models/RatingTemplate';
 import { EntityType } from 'src/app/shared/models/EntityType';
 import { Entity } from 'src/app/shared/models/Entity';
 import { concatMap, filter, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
-
 import { ContentLoaderService } from 'src/app/shared/services/content-loader.service';
 import { AnalystRole } from 'src/app/shared/models/AnalystRole';
 import {
@@ -32,6 +29,7 @@ import { UserProfileService } from '../../../shared/services/user-profile-servic
 import { TranslateService } from '@ngx-translate/core';
 import { UserProfile } from '@app/shared/models/UserProfile';
 import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
+import { LoggingService } from '@app/shared/services/logging.service';
 
 @Component({
     selector: 'app-worklist-list-item',
@@ -39,12 +37,9 @@ import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
     styleUrls: ['./worklist-list-item.component.scss']
 })
 export class WorklistListItemComponent implements OnInit, OnDestroy {
-    @Input()
-    case: Case;
-    @Input()
-    menuData: Record<'text', string>[] = [];
-    @Input()
-    userProfile: UserProfile;
+    @Input() case: Case;
+    @Input() menuData: Record<'text', string>[] = [];
+    @Input() userProfile: UserProfile;
 
     modalRef: BlueModalRef;
 
@@ -54,19 +49,18 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         event: null
     };
 
-    @Output()
-    caseEvent = new EventEmitter<ModalEvent>();
+    @Output() caseEvent = new EventEmitter<ModalEvent>();
 
     selectedCaseAction?: CasesActions;
 
-    unSubscribe$ = new Subject<void>();
+    private readonly unSubscribe$ = new Subject<void>();
 
-    actionRoutes: Record<string, AppRoutes> = {
+    readonly actionRoutes: Record<string, AppRoutes> = {
         [CasesActions.CreateFromExisting]: AppRoutes.SELECT_RATING_GROUP_AND_TEMPLATE,
         [CasesActions.EditCase]: AppRoutes.ENTITY_SELECTION
     };
 
-    ratingGroupWithNoFamilyTree: Record<RatingGroupType.SFGPrimary | RatingGroupType.SFGCoveredBonds, boolean> = {
+    readonly ratingGroupWithNoFamilyTree: Record<RatingGroupType.SFGPrimary | RatingGroupType.SFGCoveredBonds, boolean> = {
         [RatingGroupType.SFGCoveredBonds]: true,
         [RatingGroupType.SFGPrimary]: true
     };
@@ -98,55 +92,83 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         private contentLoaderService: ContentLoaderService,
         private userProfileService: UserProfileService,
         public translate: TranslateService,
-        public featureFlagService: FeatureFlagService
+        public featureFlagService: FeatureFlagService,
+        private loggingService: LoggingService
     ) {
-        this.isCommitteeWorkflow =
-            this.featureFlagService.isCommitteeWorkflowEnabled() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledFIG() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledCFG();
+        this.isCommitteeWorkflow = this.isAnyCommitteeWorkflowEnabled();
     }
 
-    openModal(value: string) {
-        /* TODO REFACTOR CODE*/
-        if (value === 'Rename Case') {
-            this.modalData.event = MenuData.rename;
-            this.modalData.caseName = this.case.name;
-            this.modalData.caseId = this.case.id;
-            this.caseEvent.emit(this.modalData);
-        } else if (value === 'Delete Case') {
-            this.modalData.event = MenuData.delete;
-            this.modalData.caseId = this.case.id;
-            this.caseEvent.emit(this.modalData);
-        } else if (value == 'Create New From Existing') {
-            /*TODO GET VALUE FROM PROPS*/
-            this.selectedCaseAction = CasesActions.CreateFromExisting;
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode: RatingsTableMode.CreateNewRecommendationFromExisting,
-                ratingsDetails: null
-            });
-            this.goToEntitySelection();
-        } else if (value === 'Rating Committee') {
-            this.navigateToInviteesPage();
-        } else if (value === 'Authoring') {
-            this.navigateToAuthoringPage();
-        } else if (value === 'Rating Recommendation') {
-            this.navigateToRatingRecommendationPage();
+    /**
+     * Handles opening different modal types based on the menu selection
+     * @param value The menu option text that was selected
+     */
+    openModal(value: string): void {
+        switch (value) {
+            case 'Rename Case':
+                this.modalData = {
+                    event: MenuData.rename,
+                    caseName: this.case.name,
+                    caseId: this.case.id
+                };
+                this.caseEvent.emit(this.modalData);
+                break;
+                
+            case 'Delete Case':
+                this.modalData = {
+                    event: MenuData.delete,
+                    caseName: '',
+                    caseId: this.case.id
+                };
+                this.caseEvent.emit(this.modalData);
+                break;
+                
+            case 'Create New From Existing':
+                this.selectedCaseAction = CasesActions.CreateFromExisting;
+                this.ratingRecommendationService.setRatingsTableMode({
+                    tableMode: RatingsTableMode.CreateNewRecommendationFromExisting,
+                    ratingsDetails: null
+                });
+                this.goToEntitySelection();
+                break;
+                
+            case 'Rating Committee':
+                this.navigateToInviteesPage();
+                break;
+                
+            case 'Authoring':
+                this.navigateToAuthoringPage();
+                break;
+                
+            case 'Rating Recommendation':
+                this.navigateToRatingRecommendationPage();
+                break;
+                
+            default:
+                this.loggingService.warn(`Unhandled menu option: ${value}`);
+                break;
         }
     }
 
-    goToEntitySelection() {
+    /**
+     * Navigate to entity selection for creating new case from existing
+     */
+    goToEntitySelection(): void {
         this.dataService.createNewFromExisting = true;
         this.case.caseDataReference.id = '';
         this.dataService.isExistingCase = true;
         this.prepareTransition();
     }
 
-    prepareTransition() {
+    /**
+     * Prepare the data for transitioning between views
+     */
+    prepareTransition(): void {
         this.clearEntity();
         this.createCommitteeSupport();
         this.dataService.updateRatingGroupSelection(this.dataService.committeSupportWrapper.ratingGroupTemplate);
         this.dataService.setSelectedJurisdiction();
         this.selectTemplateType();
+        
         if (this.ratingGroupWithNoFamilyTree[this.dataService.committeSupportWrapper.ratingGroupTemplate]) {
             this.populateSFGEntities();
         } else {
@@ -154,7 +176,10 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         }
     }
 
-    openExistingCase() {
+    /**
+     * Opens an existing case for editing
+     */
+    openExistingCase(): void {
         this.createCurrentEntityDictionary();
         this.ratingRecommendationService.setRatingsTableMode({
             tableMode: RatingsTableMode.EditRecommendation,
@@ -165,28 +190,43 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.prepareTransition();
     }
 
-    populateSFGEntities() {
+    /**
+     * Populates SFG entities and navigates to the appropriate route
+     */
+    populateSFGEntities(): void {
         this.contentLoaderService.show();
         this.setEntityFamilyList();
+        
         this.dataService.manageCaseDetails(
             CaseStatus.Initiated,
             this.dataService.committeSupportWrapper.entities[0]?.name
         );
-        this.casesService
-            .updateCase(this.dataService.committeSupportWrapper)
-            .pipe(
-                filter(() => this.selectedCaseAction === CasesActions.EditCase),
-                finalize(() => {
-                    this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
-                }),
-                takeUntil(this.unSubscribe$)
-            )
-            .subscribe();
+        
+        if (this.selectedCaseAction === CasesActions.EditCase) {
+            this.casesService
+                .updateCase(this.dataService.committeSupportWrapper)
+                .pipe(
+                    finalize(() => {
+                        this.contentLoaderService.hide();
+                        this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    }),
+                    takeUntil(this.unSubscribe$)
+                )
+                .subscribe({
+                    error: (err) => this.loggingService.error('Error updating case:', err)
+                });
+        } else {
+            this.contentLoaderService.hide();
+            this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+        }
     }
 
-    populateEntityForBasket() {
+    /**
+     * Populates entity for basket and navigates to the appropriate route
+     */
+    populateEntityForBasket(): void {
         this.contentLoaderService.show();
+        
         this.entityService
             .getUltimateParents(this.case.caseDataReference.entities)
             .pipe(
@@ -200,35 +240,57 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 ),
                 concatMap((committeeSupportWrapper) => this.casesService.createCase(committeeSupportWrapper)),
                 tap((caseResp) => this.dataService.setCaseId(caseResp.id)),
+                catchError((error) => {
+                    this.loggingService.error('Error creating case:', error);
+                    return of(null);
+                }),
                 finalize(() => {
                     this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    if (this.actionRoutes[this.selectedCaseAction]) {
+                        this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    }
                 }),
                 takeUntil(this.unSubscribe$)
             )
             .subscribe();
     }
 
-    setEntityFamilyList() {
+    /**
+     * Sets the entity family list for SFG entities
+     */
+    setEntityFamilyList(): void {
         const entityFamilyNode: EntityFamilyNode[] = [];
+        
         this.case.caseDataReference.entities.forEach((element) => {
             const entityFamily = new EntityFamilyNode(element);
             const leadAnalyst = element.analysts?.find((analyst) => analyst.role === AnalystRole.leadAnalyst)?.analyst;
+            
             if (leadAnalyst) {
                 entityFamily.leadAnalyst?.push(leadAnalyst);
             }
+            
             entityFamilyNode.push(entityFamily);
         });
+        
         this.entityService.addOrgToImpactedList(entityFamilyNode, true);
     }
 
-    setUltimateParent(ultimateParentEntity: UltimateParent[]) {
+    /**
+     * Sets the ultimate parent entity
+     * @param ultimateParentEntity Array of ultimate parent entities
+     */
+    setUltimateParent(ultimateParentEntity: UltimateParent[]): void {
         const entityFamilyNode: EntityFamilyNode[] = [];
+        
         this.case.caseDataReference.entities.forEach((selectedEntity) => {
             const entityFamily = new EntityFamilyNode(selectedEntity);
-            const currentUltimateParentEntity = ultimateParentEntity.find((parent) => selectedEntity.id == parent.id);
+            const currentUltimateParentEntity = ultimateParentEntity.find((parent) => selectedEntity.id === parent.id);
 
-            if (!currentUltimateParentEntity) return;
+            if (!currentUltimateParentEntity) {
+                this.loggingService.warn(`No ultimate parent found for entity: ${selectedEntity.id}`);
+                return;
+            }
+            
             const isOrganization = currentUltimateParentEntity.type === EntityType.Organization;
             const ultimateParent = new Entity({
                 id: currentUltimateParentEntity.ultimateParent.id,
@@ -237,35 +299,51 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 analysts: null,
                 rated: selectedEntity.rated
             } as Entity);
+            
             entityFamily.ultimateParent = new EntityFamilyNode(ultimateParent);
 
             const leadAnalyst = selectedEntity.analysts?.find(
                 (analyst) => analyst.role === AnalystRole.leadAnalyst
             )?.analyst;
+            
             if (leadAnalyst) {
                 entityFamily.leadAnalyst?.push(leadAnalyst);
             }
+            
             entityFamilyNode.push(entityFamily);
         });
+        
         this.entityService.addOrgToImpactedList(entityFamilyNode, true);
     }
 
-    selectTemplateType() {
-        if (this.case.caseDataReference.actionRequestForm && this.case.caseDataReference.ratingCommitteeMemo) {
+    /**
+     * Selects the template type based on case data
+     */
+    selectTemplateType(): void {
+        const { actionRequestForm, ratingCommitteeMemo } = this.case.caseDataReference;
+        
+        if (actionRequestForm && ratingCommitteeMemo) {
             this.dataService.selectedTemplateType = RatingTemplate.ArfRcm;
-        } else if (this.case.caseDataReference.actionRequestForm) {
+        } else if (actionRequestForm) {
             this.dataService.selectedTemplateType = RatingTemplate.Arf;
         } else {
             this.dataService.selectedTemplateType = RatingTemplate.Rcm;
         }
     }
 
-    createCommitteeSupport() {
+    /**
+     * Creates committee support data structure
+     */
+    createCommitteeSupport(): void {
         this.dataService.committeSupportWrapper = this.dataService.committeSupportWrapper.createFromCase(
             this.generateCreateCaseData()
         );
     }
 
+    /**
+     * Generates case data for creating or editing a case
+     * @returns The generated case data
+     */
     generateCreateCaseData(): CaseData {
         const { ratingCommitteeInfo, committeeMemoSetup } = this.case.caseDataReference;
         const { conflictCheckId, ...excludeConflictCheckId } = committeeMemoSetup;
@@ -276,8 +354,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             ratingCommitteeInfo: excludeExpected,
             committeeMemoSetup: excludeConflictCheckId,
         };
-        /*TODO REFACTOR THIS CODE */
+        
         if (this.selectedCaseAction === CasesActions.CreateFromExisting) {
+            // Reset specific fields for new case creation
             caseData.pressReleaseDisclosures.purposesOfAction = [];
             caseData.pressReleaseDisclosures.newlyIssuedInstrument = null;
             caseData.pressReleaseDisclosures.ratingActionDueTolookBackReview = null;
@@ -303,29 +382,36 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
             caseData.caseId = this.dataService.generateCaseId();
         }
+        
         return this.selectedCaseAction === CasesActions.EditCase ? this.case.caseDataReference : caseData;
     }
 
-    clearEntity() {
+    /**
+     * Clears entity data
+     */
+    clearEntity(): void {
         this.entityService.clearEntityFamilyData();
         this.entityService.clearSelectedOrgsInCart();
         this.dataService.clearCommitteeSetupPage();
     }
 
-    ngOnInit() {
+    /**
+     * Angular lifecycle hook - component initialization
+     */
+    ngOnInit(): void {
+        // Check if any entity has proposed ratings
         const hasProposedRating = this.case.caseDataReference?.entities?.some((entity) =>
             entity.ratingClasses?.some((ratingClass) =>
                 ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
             )
         );
 
-        const isRatingCommitteeWorkflow =
-            (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
+        // Check if rating committee workflow is enabled for this case
+        const isRatingCommitteeWorkflow = this.isRatingCommitteeWorkflowEnabled();
         
+        // Set case properties based on conditions
         this.case.showAuthoring =
-            hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
+            hasProposedRating && isRatingCommitteeWorkflow && !!this.case.caseDataReference.ratingCommitteeMemo;
 
         // Check if case is saved using any of the available indicators
         const isSavedCase = 
@@ -338,190 +424,248 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.showRatingRecommendationOption = hasProposedRating && isSavedCase;
     }
 
-    isRatingCommitteeWorkflowEnabledSOV() {
+    /**
+     * Checks if any committee workflow is enabled
+     * @returns True if any committee workflow is enabled
+     */
+    private isAnyCommitteeWorkflowEnabled(): boolean {
+        return this.featureFlagService.isCommitteeWorkflowEnabled() ||
+               this.featureFlagService.isCommitteeWorkflowEnabledFIG() ||
+               this.featureFlagService.isCommitteeWorkflowEnabledCFG();
+    }
+
+    /**
+     * Checks if rating committee workflow is enabled for the current case
+     * @returns True if rating committee workflow is enabled
+     */
+    private isRatingCommitteeWorkflowEnabled(): boolean {
         return (
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SubSovereign ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignBond ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignMDB
+            (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
+            (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
+            (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG())
         );
     }
-    
-    isRatingCommitteeWorkflowEnabledFIG() {
-        return (
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.BankingFinanceSecurities ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.NonBanking
-        );
+
+    /**
+     * Checks if SOV rating committee workflow is enabled
+     * @returns True if SOV rating committee workflow is enabled
+     */
+    private isRatingCommitteeWorkflowEnabledSOV(): boolean {
+        const ratingGroupTemplate = this.case.caseDataReference.ratingGroupTemplate;
+        return [
+            RatingGroupType.SubSovereign,
+            RatingGroupType.SovereignBond,
+            RatingGroupType.SovereignMDB
+        ].includes(ratingGroupTemplate);
     }
     
-    isRatingCommitteeWorkflowEnabledCFG() {
+    /**
+     * Checks if FIG rating committee workflow is enabled
+     * @returns True if FIG rating committee workflow is enabled
+     */
+    private isRatingCommitteeWorkflowEnabledFIG(): boolean {
+        const ratingGroupTemplate = this.case.caseDataReference.ratingGroupTemplate;
+        return [
+            RatingGroupType.BankingFinanceSecurities,
+            RatingGroupType.NonBanking
+        ].includes(ratingGroupTemplate);
+    }
+    
+    /**
+     * Checks if CFG rating committee workflow is enabled
+     * @returns True if CFG rating committee workflow is enabled
+     */
+    private isRatingCommitteeWorkflowEnabledCFG(): boolean {
         return this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.CFG;
     }
 
-    ngOnDestroy() {
+    /**
+     * Angular lifecycle hook - component destruction
+     */
+    ngOnDestroy(): void {
         this.unSubscribe$.next();
         this.unSubscribe$.complete();
     }
 
-private createCurrentEntityDictionary() {
-    // Clear existing dictionary before rebuilding
-    this.selectedCaseEntityDictionary = {};
-    
-    // Ensure entities exist before processing
-    if (!this.case.caseDataReference?.entities || !Array.isArray(this.case.caseDataReference.entities)) {
-        console.warn('No entities found in case data reference');
-        return;
-    }
-    
-    console.log(`Processing ${this.case.caseDataReference.entities.length} entities for dictionary`);
-    
-    for (const entity of this.case.caseDataReference.entities) {
-        // Skip if entity doesn't have an ID
-        if (!entity.id) {
-            console.warn('Entity without ID found, skipping');
-            continue;
+    /**
+     * Creates a dictionary of ratings from case data
+     */
+    private createCurrentEntityDictionary(): void {
+        // Clear existing dictionary before rebuilding
+        this.selectedCaseEntityDictionary = {};
+        
+        // Ensure entities exist before processing
+        if (!this.case.caseDataReference?.entities || !Array.isArray(this.case.caseDataReference.entities)) {
+            this.loggingService.warn('No entities found in case data reference');
+            return;
         }
         
-        const debt = entity.debts ?? [];
-        const ratingClass = entity.ratingClasses ?? [];
+        this.loggingService.debug(`Processing ${this.case.caseDataReference.entities.length} entities for dictionary`);
         
-        // Log for debugging
-        console.log(`Entity ${entity.id}: ${ratingClass.length} rating classes, ${debt.length} debts`);
-        
-        // Build dictionary entries for both rating classes and debts
-        this.buildDictionary(entity.id, ratingClass, RatingRecommendationTableView.Class);
-        this.buildDictionary(entity.id, debt, RatingRecommendationTableView.Debt);
-    }
-    
-    console.log(`Dictionary created with ${Object.keys(this.selectedCaseEntityDictionary).length} entries`);
-}
-
-private buildDictionary<T extends { ratings?: Rating[]; id: string }>(
-    entityId: string,
-    items: T[],
-    ratingType: RatingRecommendationTableView
-): void {
-    if (!items || !Array.isArray(items) || items.length === 0) {
-        return;
-    }
-    
-    for (const item of items) {
-        // Skip if item doesn't have ratings or ID
-        if (!item.ratings || !Array.isArray(item.ratings) || !item.id) {
-            continue;
-        }
-        
-        for (const rating of item.ratings) {
-            // Skip if rating or identifier is missing
-            if (!rating || !rating.identifier) {
+        for (const entity of this.case.caseDataReference.entities) {
+            // Skip if entity doesn't have an ID
+            if (!entity.id) {
+                this.loggingService.warn('Entity without ID found, skipping');
                 continue;
             }
             
-            // Generate appropriate key based on rating type
-            const key = ratingType === RatingRecommendationTableView.Class
-                ? generateKey(entityId, rating.identifier)
-                : generateKey(entityId, item.id, rating.identifier);
+            const debt = entity.debts ?? [];
+            const ratingClass = entity.ratingClasses ?? [];
             
-            // Store rating in dictionary
-            this.selectedCaseEntityDictionary[key] = { ...rating };
+            // Process rating classes and debts
+            this.buildDictionary(entity.id, ratingClass, RatingRecommendationTableView.Class);
+            this.buildDictionary(entity.id, debt, RatingRecommendationTableView.Debt);
+        }
+        
+        this.loggingService.debug(`Dictionary created with ${Object.keys(this.selectedCaseEntityDictionary).length} entries`);
+    }
+
+    /**
+     * Builds dictionary entries for ratings
+     * @param entityId The entity ID
+     * @param items Array of items with ratings
+     * @param ratingType The rating type (Class or Debt)
+     */
+    private buildDictionary<T extends { ratings?: Rating[]; id: string }>(
+        entityId: string,
+        items: T[],
+        ratingType: RatingRecommendationTableView
+    ): void {
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return;
+        }
+        
+        for (const item of items) {
+            // Skip if item doesn't have ratings or ID
+            if (!item.ratings || !Array.isArray(item.ratings) || !item.id) {
+                continue;
+            }
+            
+            for (const rating of item.ratings) {
+                // Skip if rating or identifier is missing
+                if (!rating || !rating.identifier) {
+                    continue;
+                }
+                
+                // Generate appropriate key based on rating type
+                const key = ratingType === RatingRecommendationTableView.Class
+                    ? generateKey(entityId, rating.identifier)
+                    : generateKey(entityId, item.id, rating.identifier);
+                
+                // Store rating in dictionary
+                this.selectedCaseEntityDictionary[key] = { ...rating };
+            }
         }
     }
-}
 
-    private navigateToInviteesPage() {
+    /**
+     * Navigates to the invitees page for the current case
+     */
+    private navigateToInviteesPage(): void {
         this.contentLoaderService.show();
-        // Force navigation to complete by using a direct window.location approach if needed
         const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`;
-        this.router.navigate([url.split('/').filter(segment => segment)])
+        const urlSegments = url.split('/').filter(segment => segment);
+        
+        this.router.navigate(urlSegments)
             .then(() => {
                 this.contentLoaderService.hide();
             })
             .catch(error => {
-                console.error('Navigation error:', error);
+                this.loggingService.error('Navigation error:', error);
                 this.contentLoaderService.hide();
                 window.location.href = url;
             });
     }
 
-    private navigateToAuthoringPage() {
+    /**
+     * Navigates to the authoring page for the current case
+     */
+    private navigateToAuthoringPage(): void {
         this.contentLoaderService.show();
         const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`;
-        this.router.navigate([url.split('/').filter(segment => segment)])
+        const urlSegments = url.split('/').filter(segment => segment);
+        
+        this.router.navigate(urlSegments)
             .then(() => {
                 this.contentLoaderService.hide();
             })
             .catch(error => {
-                console.error('Navigation error:', error);
+                this.loggingService.error('Navigation error:', error);
                 this.contentLoaderService.hide();
                 window.location.href = url;
             });
     }
 
-    private navigateToRatingRecommendationPage() {
-    // Show the content loader before starting any work
-    this.contentLoaderService.show();
-    
-    try {
-        // Step 1: Create the entity dictionary
-        this.createCurrentEntityDictionary();
+    /**
+     * Navigates to the rating recommendation page for the current case
+     */
+    private navigateToRatingRecommendationPage(): void {
+        // Show the content loader before starting any work
+        this.contentLoaderService.show();
         
-        // Step 2: Set the table mode
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-        });
-        
-        // Step 3: Set data service flags
-        this.dataService.isExistingCase = true;
-        
-        // Step 4: Create committee support wrapper if it doesn't exist
-        if (!this.dataService.committeSupportWrapper) {
-            console.log('Creating new committee support wrapper');
-            this.dataService.initializeCommitteeSupportWrapper();
-        }
-        
-        // Step 5: Set up the committee support data
-        this.createCommitteeSupport();
-        
-        // Step 6: Mark as having rating recommendation
-        this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
-        
-        // Step 7: Prepare case data for navigation
-        this.casesService.getCaseById(this.case.id)
-            .pipe(
-                // Handle potential errors to prevent navigation failures
-                catchError(error => {
-                    console.error('Error fetching case data:', error);
-                    return of(this.case);
-                }),
-                // Use a finalize to ensure content loader is hidden even if there's an error
-                finalize(() => {
-                    this.contentLoaderService.hide();
-                }),
-                // Clean up the subscription
-                takeUntil(this.unSubscribe$)
-            )
-            .subscribe(caseData => {
-                // Step 8: Navigate with proper route parameters
-                const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-                const urlSegments = url.split('/').filter(segment => segment);
-                
-                // Attempt to use the Angular router first
-                this.router.navigate(urlSegments)
-                    .then(() => {
-                        console.log('Successfully navigated to Rating Recommendation');
-                    })
-                    .catch(error => {
-                        console.error('Router navigation failed:', error);
-                        
-                        // Fall back to direct navigation as a last resort
-                        window.location.href = url;
-                    });
+        try {
+            // Step 1: Create the entity dictionary
+            this.createCurrentEntityDictionary();
+            
+            // Step 2: Set the table mode
+            this.ratingRecommendationService.setRatingsTableMode({
+                tableMode: RatingsTableMode.EditRecommendation,
+                ratingsDetails: this.selectedCaseEntityDictionary
             });
-    } catch (error) {
-        console.error('Error preparing for navigation:', error);
-        this.contentLoaderService.hide();
-        
-        // Simple fallback if something goes catastrophically wrong
-        alert('An error occurred while preparing to navigate. Please try again.');
+            
+            // Step 3: Set data service flags
+            this.dataService.isExistingCase = true;
+            
+            // Step 4: Create committee support wrapper if it doesn't exist
+            if (!this.dataService.committeSupportWrapper) {
+                this.loggingService.debug('Creating new committee support wrapper');
+                this.dataService.initializeCommitteeSupportWrapper();
+            }
+            
+            // Step 5: Set up the committee support data
+            this.createCommitteeSupport();
+            
+            // Step 6: Mark as having rating recommendation
+            this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
+            
+            // Step 7: Prepare case data for navigation
+            this.casesService.getCaseById(this.case.id)
+                .pipe(
+                    // Handle potential errors to prevent navigation failures
+                    catchError(error => {
+                        this.loggingService.error('Error fetching case data:', error);
+                        return of(this.case);
+                    }),
+                    // Use a finalize to ensure content loader is hidden even if there's an error
+                    finalize(() => {
+                        this.contentLoaderService.hide();
+                    }),
+                    // Clean up the subscription
+                    takeUntil(this.unSubscribe$)
+                )
+                .subscribe(() => {
+                    // Step 8: Navigate with proper route parameters
+                    const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
+                    const urlSegments = url.split('/').filter(segment => segment);
+                    
+                    // Attempt to use the Angular router first
+                    this.router.navigate(urlSegments)
+                        .then(() => {
+                            this.loggingService.debug('Successfully navigated to Rating Recommendation');
+                        })
+                        .catch(error => {
+                            this.loggingService.error('Router navigation failed:', error);
+                            
+                            // Fall back to direct navigation as a last resort
+                            window.location.href = url;
+                        });
+                });
+        } catch (error) {
+            this.loggingService.error('Error preparing for navigation:', error);
+            this.contentLoaderService.hide();
+            
+            // Simple fallback if something goes catastrophically wrong
+            alert('An error occurred while preparing to navigate. Please try again.');
+        }
     }
 }
