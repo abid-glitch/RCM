@@ -425,13 +425,16 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.dataService.isExistingCase = true
         this.createCommitteeSupport()
         //  this.ratingRecommendationService.setRatingRecommendationViewType(RatingRecommendationTableView.Class);
-        this.casesService.router
-        .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
+        // this.casesService.router
+        const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`
+        this.casesService.router.navigateByUrl(url)
         .then(() => {
             this.contentLoaderService.hide();
         })
         .catch(error => {
-            this.contentLoaderService.hide()
+            this.contentLoaderService.hide();
+
+            window.location.href = url;
         })
 
     }}
