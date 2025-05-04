@@ -1,439 +1,539 @@
-import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-
-import { BlueModalRef, BluePopoverAnchor } from '@moodys/blue-ng';
-import { Case, CasesActions } from '../../types/case';
-import { MenuData } from '../../types/enums/worklist.enums';
-
-import { DataService } from 'src/app/shared/services/data.service';
-import { ModalEvent } from '../../types/modalEvent';
-import { Router } from '@angular/router';
-import { AppRoutes } from 'src/app/routes/routes';
+import { Component, EventEmitter, Injector, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { BlueModalRef, BlueModalService } from '@moodys/blue-ng';
+import { CancelConfirmationModalComponent } from 'src/app/features/cancel-confirmation-modal/cancel-confirmation-modal.component';
 import { EntityService } from 'src/app/shared/services/entity.service';
-import { EntityFamilyNode } from 'src/app/shared/models/EntityFamilyNode';
-import { RatingRecommendationService } from 'src/app/features/rating-recommendation/services/rating-recommendation.service';
-import { RatingTemplate } from 'src/app/shared/models/RatingTemplate';
-import { EntityType } from 'src/app/shared/models/EntityType';
-import { Entity } from 'src/app/shared/models/Entity';
-import { concatMap, filter, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
-
-import { ContentLoaderService } from 'src/app/shared/services/content-loader.service';
-import { AnalystRole } from 'src/app/shared/models/AnalystRole';
-import {
-    RatingRecommendationTableView,
-    RatingsTableMode
-} from '../../../features/rating-recommendation/enums/rating-recommendation.enum';
-import { CaseData } from '../../../shared/types/case-data';
-import { CasesService, CaseStatus } from '../../../shared/services/cases';
-import { Subject } from 'rxjs';
-import { generateKey, Rating } from '../../../features/rating-recommendation';
-import { UltimateParent } from '../../../shared/models/UltimateParent';
-import { RatingGroupType } from 'src/app/shared/models/RatingGroupType';
-import { UserProfileService } from '../../../shared/services/user-profile-service';
+import { DataService } from 'src/app/shared/services/data.service';
+import { AppRoutes } from 'src/app/routes/routes';
+import { NavButtonMetadata } from './interfaces';
+import { FeatureFlagService } from '../../services/feature-flag.service';
+import { SplitTreatments } from '../../models/SplitTreatment';
+import { CasesService, CaseStatus } from '../../services/cases';
+import { debounceTime, exhaustMap, filter, finalize, first, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { RatingRecommendationService } from '../../../features/rating-recommendation/services/rating-recommendation.service';
+import { JapanesePrDisclosurePopupComponent } from '../../../features/japanese-pr-disclosure-popup/japanese-pr-disclosure-popup.component';
+import { JapanesePRDisclosure } from '../../models/JapanesePRDisclosure';
+import { RatingTemplate } from '../../models/RatingTemplate';
+import { GenerationService } from '../../services/document-generation.service';
+import { RatingGroupType } from '../../models/RatingGroupType';
+import { BehaviorSubject, combineLatest, Observable, ReplaySubject, Subject } from 'rxjs';
+import { RatingRecommendationSaveAndDownloadModalComponent } from 'src/app/features/rating-recommendation-save-and-download-modal/rating-recommendation-save-and-download-modal.component';
+import { ProcessFlowDataManager } from './helpers/processFlowDataManager';
+import { NotificationsService } from 'src/app/core/services/notifications.service';
+import { NotificationType } from '../../models/Notification';
 import { TranslateService } from '@ngx-translate/core';
+import { UserProfileService } from '@app/shared/services/user-profile-service';
 import { UserProfile } from '@app/shared/models/UserProfile';
-import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
+import { RatingRecommendationTableView } from '@app/features/rating-recommendation/enums/rating-recommendation.enum';
+import { CommitteeSupport } from '@app/shared/models/CommitteeSupport';
+import { SelectedRatingRecommendationEntities } from '@app/features/rating-recommendation';
 
 @Component({
-    selector: 'app-worklist-list-item',
-    templateUrl: './worklist-list-item.component.html',
-    styleUrls: ['./worklist-list-item.component.scss']
+    selector: 'app-bottom-navbar',
+    templateUrl: './bottom-navbar.component.html',
+    styleUrls: ['./bottom-navbar.component.scss']
 })
-export class WorklistListItemComponent implements OnInit, OnDestroy {
-    @Input()
-    case: Case;
-    @Input()
-    menuData: Record<'text', string>[] = [];
-    @Input()
-    userProfile: UserProfile;
+export class BottomNavbarComponent extends ProcessFlowDataManager implements OnInit, OnDestroy {
+    /*Pop up Modals Variable*/
+    public modalRef: BlueModalRef;
+    private notificationsService: NotificationsService;
+    public modalService: BlueModalService;
+    public translateService: TranslateService;
 
-    modalRef: BlueModalRef;
+    /*Page navigation Variable*/
+    @Input() nextPage!: AppRoutes;
+    @Input() prevPage!: AppRoutes;
+    @Input() navMetaData!: NavButtonMetadata;
+    /*Buttons Status Variable*/
+    @Input() sectionIsValid = false;
+    @Input() isDownloadStage = false;
+    @Input() isEntitySelectionSection = false;
+    isSaveAction = false;
+    isArfDownload = false;
+    isArfOnly = false;
 
-    modalData: ModalEvent = {
-        caseName: '',
-        caseId: '',
-        event: null
-    };
+    /*Button Actions Emitter Variable*/
 
-    @Output()
-    caseEvent = new EventEmitter<ModalEvent>();
+    @Output() continueClickedEventEmitter = new EventEmitter<void>();
+    @Output() backClickedEventEmitter = new EventEmitter<void>();
 
-    selectedCaseAction?: CasesActions;
+    @Input() isRatingsTableValid = false;
+    @Input() enableActionButton = false;
+
+    loading$ = new BehaviorSubject<boolean>(false);
 
     unSubscribe$ = new Subject<void>();
 
-    actionRoutes: Record<string, AppRoutes> = {
-        [CasesActions.CreateFromExisting]: AppRoutes.SELECT_RATING_GROUP_AND_TEMPLATE,
-        [CasesActions.EditCase]: AppRoutes.ENTITY_SELECTION
-    };
+    public isJapaneseDisclosureApplicable: boolean;
+    userProfile$: Observable<UserProfile>;
+    readonly isRatingCommitteeWorkflow = true
+        // this.ratingRecommendationService.getCurrentRatingGroupTemplate() === RatingGroupType.SubSovereign ||
+        // this.ratingRecommendationService.getCurrentRatingGroupTemplate() === RatingGroupType.SovereignBond ||
+        // this.ratingRecommendationService.getCurrentRatingGroupTemplate() === RatingGroupType.SovereignMDB;
+    isCommitteeWorkflow = true
+        // this.featureFlagService.getTreatmentState(SplitTreatments.SOV) ||
+        // this.featureFlagService.getTreatmentState(SplitTreatments.SOV_MDB) ||
+        // this.featureFlagService.getTreatmentState(SplitTreatments.SUB_SOV);
 
-    ratingGroupWithNoFamilyTree: Record<RatingGroupType.SFGPrimary | RatingGroupType.SFGCoveredBonds, boolean> = {
-        [RatingGroupType.SFGCoveredBonds]: true,
-        [RatingGroupType.SFGPrimary]: true
-    };
+    ratingRecommendation$ = this.ratingRecommendationService.ratingRecommendationsTableData$;
 
-    selectedCaseEntityDictionary: Record<string, Rating> = {};
-
-    @ViewChild(BluePopoverAnchor) bluePopOverElement: BluePopoverAnchor;
-
-    userProfile$ = this.userProfileService.userProfile$.pipe(
-        filter((userProfile) => !!userProfile),
-        map((userProfile) => {
-            return {
-                createdBy: `${userProfile.firstName} ${userProfile.lastName}`,
-                lastModifiedBy: `${userProfile.firstName} ${userProfile.lastName}`
-            };
-        })
-    );
-
-    menuIncludeRatingCommittee = false;
-    isCommitteeWorkflow = false;
-    // isshowRatingRecommendation = true;
-    showRatingRecommendationOption = false;
+    continueClicked$ = new ReplaySubject<boolean>(1);
+    isFinalized = this.dataService.committeSupportWrapper.isFinalized;
     constructor(
-        private dataService: DataService,
-        private router: Router,
-        private entityService: EntityService,
-        private ratingRecommendationService: RatingRecommendationService,
+        public entityService: EntityService,
+        public dataService: DataService,
+        public generationService: GenerationService,
+        public featureFlagService: FeatureFlagService,
+        public ratingRecommendationService: RatingRecommendationService,
         public casesService: CasesService,
-        private contentLoaderService: ContentLoaderService,
         private userProfileService: UserProfileService,
-        public translate: TranslateService,
-        public featureFlagService: FeatureFlagService
+        private injector: Injector
     ) {
-        this.isCommitteeWorkflow =
-            this.featureFlagService.isCommitteeWorkflowEnabled() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledFIG() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledCFG();
+        super(
+            entityService,
+            dataService,
+            generationService,
+            ratingRecommendationService,
+            casesService,
+            featureFlagService
+        );
+
+        this.notificationsService = injector.get<NotificationsService>(NotificationsService);
+        this.modalService = injector.get<BlueModalService>(BlueModalService);
+        this.translateService = injector.get<TranslateService>(TranslateService);
+
+        this.userProfile$ = this.userProfileService.userProfile$;
     }
 
-    openModal(value: string) {
-        /* TODO REFACTOR CODE*/
-        if (value === 'Rename Case') {
-            this.modalData.event = MenuData.rename;
-            this.modalData.caseName = this.case.name;
-            this.modalData.caseId = this.case.id;
-            this.caseEvent.emit(this.modalData);
-        } else if (value === 'Delete Case') {
-            this.modalData.event = MenuData.delete;
-            this.modalData.caseId = this.case.id;
-            this.caseEvent.emit(this.modalData);
-        } else if (value == 'Create New From Existing') {
-            /*TODO GET VALUE FROM PROPS*/
-            this.selectedCaseAction = CasesActions.CreateFromExisting;
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode: RatingsTableMode.CreateNewRecommendationFromExisting,
-                ratingsDetails: null
-            });
-            this.goToEntitySelection();
-        } else if (value === 'Rating Committee') {
-            this.navigateToInviteesPage();
-        } else if (value === 'Authoring') {
-            this.navigateToAuthoringPage();
+    ngOnInit(): void {
+        this.initFeatureFlagValues();
+        this.isArfOnly = this.dataService.selectedTemplateType == RatingTemplate.Arf;
+        this.isArfDownload =
+            this.isRatingCommitteeWorkflow &&
+            (this.dataService.selectedTemplateType == RatingTemplate.Arf ||
+                this.dataService.selectedTemplateType == RatingTemplate.ArfRcm);
+
+        /*SUBSCRIBE TO DOWNLOAD COMPLETE*/
+        this.generationService.downloadComplete$
+            .pipe(
+                filter(() => this.isRatingRecommendation && !this.allowResetToHomePageFlag),
+                tap(() => this.navigateTo()),
+                takeUntil(this.unSubscribe$)
+            )
+            .subscribe();
+    }
+
+    private initFeatureFlagValues() {
+        this.isRatingRecommendation = this.featureFlagService.getTreatmentState(
+            SplitTreatments.ONLINE_RATING_RECOMMENDATION_TABLE
+        );
+
+        this.allowResetToHomePageFlag = this.featureFlagService.getTreatmentState(
+            SplitTreatments.AFTER_SAVE_AND_DOWNLOAD_DO_NOT_REDIRECT_TO_HOME_SCREEN
+        );
+    }
+
+    /* Manages actions when cases cancellation is clicked */
+    public confirmCancelSelection(): void {
+        this.modalRef = this.modalService.open(CancelConfirmationModalComponent, {
+            acceptFn: () => {
+                this.resetToHomePage();
+            },
+
+            dismissFn: () => {
+                return;
+            }
+        });
+    }
+
+    handleArfDownload() {
+        if (this.dataService.selectedTemplateType == RatingTemplate.ArfRcm) {
+            if (this.isDownloadStage && !this.isRatingsTableValid) {
+                this.continueClickedEventEmitter.emit();
+                this.continueClicked$.next(true);
+                return;
+            }
+            this.handleSaveAndDownload();
+        }
+    }
+
+    /* Page navigation when continue/saveAndContinue button is clicked */
+    confirmContinueSelection(save = true): void {
+        if (save && this.isDownloadStage && !this.isRatingsTableValid) {
+            this.continueClickedEventEmitter.emit();
+            this.continueClicked$.next(true);
+            return;
         }
 
-        else if (value === 'Rating Recommendation'){
-            this.navigateToRatingRecommendationPage();
+        if (!save || !this.isRatingRecommendation || !this.entityService.selectedOrgTobeImpacted.length) {
+            this.handleNavigationForward();
+        } else {
+            /*Perform Save And Continue*/
+            this.saveCurrentWorkProgress();
+            this.continueClickedEventEmitter.emit();
+            this.continueClicked$.next(true);
         }
+    }
+
+    /*Navigates to next page only when the current button action is not Save
+     * and continue and then resets loading states
+     * */
+    navigate(): void {
+        if (!this.isSaveAction) {
+            if (this.isDownloadStage && !this.isArfOnly && this.isCommitteeWorkflow && this.isRatingCommitteeWorkflow) {
+                this.casesService.router.navigate([
+                    AppRoutes.CASE,
+                    this.dataService.committeSupportWrapper.id,
+                    AppRoutes.EXECUTIVE_SUMMARY
+                ]);
+            } else {
+                this.handleNavigationForward();
+            }
+        }
+        this.isSaveAction = false;
+    }
+
+    enableButton() {
+        this.loading$.next(false);
+    }
+
+    /* Manages save actions when the save button is clicked
+     * and disables navigation when saving action is being done
+     * */
+    onClickedSaveButton(): void {
+        this.isSaveAction = true;
+        this.loading$.next(true);
+        this.updateOrCreateNewCase(true);
+
+        // if(this.dataService.committeSupportWrapper && this.dataService.committeSupportWrapper.id){
+        //     localStorage.setItem(`case-${this.dataService.committeSupportWrapper.id}-saved`, 'true');
+        // }
+        // if(this.dataService.committeSupportWrapper){
+        //     this.ratingRecommendationService.markCaseAsSaved(this.dataService.committeSupportWrapper.id)
+        //         }
+
+                this.updateOrCreateNewCase(true)
         
     }
 
-    goToEntitySelection() {
-        this.dataService.createNewFromExisting = true;
-        this.case.caseDataReference.id = '';
-        this.dataService.isExistingCase = true;
-        this.prepareTransition();
-    }
-
-
-    prepareTransition() {
-        this.clearEntity();
-        this.createCommitteeSupport();
-        this.dataService.updateRatingGroupSelection(this.dataService.committeSupportWrapper.ratingGroupTemplate);
-        this.dataService.setSelectedJurisdiction();
-        this.selectTemplateType();
-        if (this.ratingGroupWithNoFamilyTree[this.dataService.committeSupportWrapper.ratingGroupTemplate]) {
-            this.populateSFGEntities();
-        } else {
-            this.populateEntityForBasket();
-        }
-    }
-
-    openExistingCase() {
-        this.createCurrentEntityDictionary();
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-        });
-        this.selectedCaseAction = CasesActions.EditCase;
-        this.dataService.isExistingCase = true;
-        this.prepareTransition();
-    }
-
-    populateSFGEntities() {
-        this.contentLoaderService.show();
-        this.setEntityFamilyList();
-        this.dataService.manageCaseDetails(
-            CaseStatus.Initiated,
-            this.dataService.committeSupportWrapper.entities[0]?.name
-        );
-        this.casesService
-            .updateCase(this.dataService.committeSupportWrapper)
-            .pipe(
-                filter(() => this.selectedCaseAction === CasesActions.EditCase),
-                finalize(() => {
-                    this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
-                }),
-                takeUntil(this.unSubscribe$)
-            )
-            .subscribe();
-    }
-
-    populateEntityForBasket() {
-        this.contentLoaderService.show();
-        this.entityService
-            .getUltimateParents(this.case.caseDataReference.entities)
-            .pipe(
-                tap((ultimateParentEntity) => this.setUltimateParent(ultimateParentEntity)),
-                filter(() => this.selectedCaseAction === CasesActions.CreateFromExisting),
-                switchMap(() =>
-                    this.dataService.manageCaseDetails(
-                        CaseStatus.Initiated,
-                        this.entityService.selectedOrgTobeImpacted[0]?.name
-                    )
-                ),
-                concatMap((committeeSupportWrapper) => this.casesService.createCase(committeeSupportWrapper)),
-                tap((caseResp) => this.dataService.setCaseId(caseResp.id)),
-                finalize(() => {
-                    this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
-                }),
-                takeUntil(this.unSubscribe$)
-            )
-            .subscribe();
-    }
-
-    setEntityFamilyList() {
-        const entityFamilyNode: EntityFamilyNode[] = [];
-        this.case.caseDataReference.entities.forEach((element) => {
-            const entityFamily = new EntityFamilyNode(element);
-            const leadAnalyst = element.analysts?.find((analyst) => analyst.role === AnalystRole.leadAnalyst).analyst;
-            entityFamily.leadAnalyst?.push(leadAnalyst);
-            entityFamilyNode.push(entityFamily);
-        });
-        this.entityService.addOrgToImpactedList(entityFamilyNode, true);
-    }
-
-    setUltimateParent(ultimateParentEntity: UltimateParent[]) {
-        const entityFamilyNode: EntityFamilyNode[] = [];
-        this.case.caseDataReference.entities.forEach((selectedEntity) => {
-            const entityFamily = new EntityFamilyNode(selectedEntity);
-            const currentUltimateParentEntity = ultimateParentEntity.find((parent) => selectedEntity.id == parent.id);
-
-            if (!currentUltimateParentEntity) return;
-            const isOrganization = currentUltimateParentEntity.type === EntityType.Organization;
-            const ultimateParent = new Entity({
-                id: currentUltimateParentEntity.ultimateParent.id,
-                name: currentUltimateParentEntity.ultimateParent.name,
-                type: isOrganization ? EntityType.Organization : EntityType.Deal,
-                analysts: null,
-                rated: selectedEntity.rated
-            } as Entity);
-            entityFamily.ultimateParent = new EntityFamilyNode(ultimateParent);
-
-            const leadAnalyst = selectedEntity.analysts?.find(
-                (analyst) => analyst.role === AnalystRole.leadAnalyst
-            ).analyst;
-            entityFamily.leadAnalyst?.push(leadAnalyst);
-            entityFamilyNode.push(entityFamily);
-        });
-        this.entityService.addOrgToImpactedList(entityFamilyNode, true);
-    }
-
-    selectTemplateType() {
-        if (this.case.caseDataReference.actionRequestForm && this.case.caseDataReference.ratingCommitteeMemo) {
-            this.dataService.selectedTemplateType = RatingTemplate.ArfRcm;
-        } else if (this.case.caseDataReference.actionRequestForm) {
-            this.dataService.selectedTemplateType = RatingTemplate.Arf;
-        } else {
-            this.dataService.selectedTemplateType = RatingTemplate.Rcm;
-        }
-    }
-
-    createCommitteeSupport() {
-        this.dataService.committeSupportWrapper = this.dataService.committeSupportWrapper.createFromCase(
-            this.generateCreateCaseData()
-        );
-    }
-
-    generateCreateCaseData(): CaseData {
-        const { ratingCommitteeInfo, committeeMemoSetup } = this.case.caseDataReference;
-        const { conflictCheckId, ...excludeConflictCheckId } = committeeMemoSetup;
-        const { expected, ...excludeExpected } = ratingCommitteeInfo;
-
-        const caseData: CaseData = {
-            ...this.case.caseDataReference,
-            ratingCommitteeInfo: excludeExpected,
-            committeeMemoSetup: excludeConflictCheckId,
-        };
-        /*TODO REFACTOR THIS CODE */
-        if (this.selectedCaseAction === CasesActions.CreateFromExisting) {
-            caseData.pressReleaseDisclosures.purposesOfAction = [];
-            caseData.pressReleaseDisclosures.newlyIssuedInstrument = null;
-            caseData.pressReleaseDisclosures.ratingActionDueTolookBackReview = null;
-            caseData.pressReleaseDisclosures.esgFactorsKeyDrivers = null;
-            caseData.pressReleaseDisclosures.relevantESGFactors = [];
-            caseData.pressReleaseDisclosures.withdrawalReasons = [];
-            caseData.pressReleaseDisclosures.accuRateInformations = [];
-
-            caseData.regulatoryDisclosures.qualityOfInformationQuestion = null;
-            caseData.regulatoryDisclosures.qualityOfInformationOptions = [];
-            caseData.regulatoryDisclosures.qualityOfInfoUnderReviewOption = null;
-            caseData.regulatoryDisclosures.informationDisclosureSFOnly = null;
-            caseData.regulatoryDisclosures.reasonForReviewAction = [];
-
-            caseData.committeeMemoSetup.keyFactualElements = [];
-
-            caseData.ratingCommitteeInfo.number = null;
-            caseData.ratingCommitteeInfo.closingDate = null;
-
-            caseData.committeeMemoSetup.lgdModelUsed = undefined;
-            caseData.committeeMemoSetup.crsCrmVerified = undefined;
-            caseData.committeeMemoSetup.insuranceScoreUsed = undefined;
-
-            caseData.caseId = this.dataService.generateCaseId();
-        }
-        return this.selectedCaseAction === CasesActions.EditCase ? this.case.caseDataReference : caseData;
-    }
-
-    clearEntity() {
-        this.entityService.clearEntityFamilyData();
-        this.entityService.clearSelectedOrgsInCart();
-        this.dataService.clearCommitteeSetupPage();
-    }
-
-    ngOnInit() {
-        const hasProposedRating = this.case.caseDataReference?.entities?.some((entity) =>
-            entity.ratingClasses?.some((ratingClass) =>
-                ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
-            )
-        );
-
-        // this.showRatingRecommendation = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
-        const isRatingCommitteeWorkflow =
-            (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
-        this.case.showAuthoring =
-            hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
-
-        // this.case.showRatingRecommendation = hasProposedRating 
-        // this.showRatingRecommendationOption = hasProposedRating && (
-        //     !!localStorage.getItem(`case-${this.case.id}-saved`) ||
-        //     !!this.case.caseDataReference?.lastSaveAndDownloadDate
-        // )
-
-        // const isSavedCase = this.case.caseDataReference?.lastSaveAndDownloadDate ||
-        // this.case.caseDataReference?.status !== CaseStatus.Initiated
-
-
-        const isSavedCase = this.ratingRecommendationService.isCaseSaved(this.case.id) || 
-        this.case.caseDataReference?.status !== CaseStatus.Initiated || 
-        !!this.case.caseDataReference?.lastSaveAndDownloadDate;
-
-                this.case.showRatingRecommendation = hasProposedRating;
-        this.showRatingRecommendationOption = hasProposedRating && isSavedCase
-
-
-        // this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
-
-
-    }
-
-    isRatingCommitteeWorkflowEnabledSOV() {
-        return (
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SubSovereign ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignBond ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignMDB
-        );
-    }
-    isRatingCommitteeWorkflowEnabledFIG() {
-        return (
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.BankingFinanceSecurities ||
-            this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.NonBanking
-        );
-    }
-    isRatingCommitteeWorkflowEnabledCFG() {
-        return this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.CFG;
-    }
-
-    ngOnDestroy() {
-        this.unSubscribe$.next();
-        this.unSubscribe$.complete();
-    }
-
-    private createCurrentEntityDictionary() {
-        for (const entity of this.case.caseDataReference.entities) {
-            const debt = entity.debts ?? [];
-            const ratingClass = entity.ratingClasses ?? [];
-            this.buildDictionary(entity.id, ratingClass, RatingRecommendationTableView.Class);
-            this.buildDictionary(entity.id, debt, RatingRecommendationTableView.Debt);
-        }
-    }
-
-    private buildDictionary<T extends { ratings: Rating[]; id: string }>(
-        entityId: string,
-        ratings: T[],
-        ratingType: RatingRecommendationTableView
-    ): void {
-        for (const parentRating of ratings) {
-            for (const rating of parentRating.ratings) {
-                const key =
-                    ratingType === RatingRecommendationTableView.Class
-                        ? generateKey(entityId, rating.identifier)
-                        : generateKey(entityId, parentRating.id, rating.identifier);
-                this.selectedCaseEntityDictionary[key] = rating;
+    /*Manages saving current work progress*/
+    saveCurrentWorkProgress(): void {
+        if (this.entityService.selectedOrgTobeImpacted.length) {
+            if (this.isRatingRecommendation && !this.isDownloadStage) {
+                this.handleUpdateOrCreateCase(CaseStatus.InProgress);
+            } else if (this.isCommitteeWorkflow && !this.isArfOnly && this.isRatingCommitteeWorkflow) {
+                this.handleUpdateOrCreateCase(CaseStatus.Transitioned);
+            } else {
+                this.handleSaveAndDownload();
             }
         }
     }
 
-    private navigateToInviteesPage() {
-        this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`)
-            .then(() => {
-                this.contentLoaderService.hide();
-            });
+    private handleUpdateOrCreateCase(caseStatus: CaseStatus) {
+        this.loading$.next(true);
+        this.updateOrCreateNewCase(false, caseStatus);
     }
 
-    private navigateToAuthoringPage() {
-        this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`)
-            .then(() => {
-                this.contentLoaderService.hide();
+    private handleSaveAndDownload() {
+        if (this.checkIfModalIsApplicableForRatingGroup()) {
+            this.saveAndDownload();
+        } else {
+            this.modalRef = this.modalService.open(RatingRecommendationSaveAndDownloadModalComponent, {
+                save: this.saveAndDownload.bind(this)
             });
+        }
     }
 
-    private navigateToRatingRecommendationPage(){
-        this.contentLoaderService.show();
-        this.createCurrentEntityDictionary();
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: null
+    checkIfModalIsApplicableForRatingGroup() {
+        return (
+            this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGCoveredBonds ||
+            this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGPrimary ||
+            // this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.ClosedEndFunds
+            this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.NonBanking
+        );
+    }
+
+    /*Manages u[dating or creating new case contingent on if variable committeSupportWrapper has an id*/
+    updateOrCreateNewCase(saveButtonClicked = false, caseStatus: CaseStatus = CaseStatus.InProgress): void {
+        if (this.dataService.committeSupportWrapper?.id) {
+            this.updateCase(caseStatus, saveButtonClicked);
+        } else {
+            this.createCase();
+        }
+    }
+
+    /*Create new Case and Navigate to next page*/
+    createCase(): void {
+        this.dataService.committeSupportWrapper.caseId = this.dataService.generateCaseId();
+        this.dataService
+            .manageCaseDetails(CaseStatus.Initiated, this.entityService.selectedOrgTobeImpacted[0]?.name)
+            .pipe(
+                first(),
+                exhaustMap((committeeSupportWrapper) => this.casesService.createCase(committeeSupportWrapper)),
+                tap((caseCreated) => {
+                    this.dataService.setCaseId(caseCreated.id);
+                    this.navigate();
+                }),
+                finalize(() => {
+                    this.enableButton();
+                })
+            )
+            .subscribe();
+    }
+
+    generateCaseId() {
+        let caseId = '';
+        let dateTimeSecs = Date.now().toString();
+        dateTimeSecs =
+            dateTimeSecs.substring(0, 4) +
+            '-' +
+            dateTimeSecs.substring(4, 8) +
+            '-' +
+            dateTimeSecs.substring(8, 12) +
+            '-' +
+            dateTimeSecs.substring(12);
+
+        if (this.dataService.getUserProfiles().size > 0) {
+            caseId = this.dataService.getUserProfiles().keys().next().value.toUpperCase() + '-' + dateTimeSecs;
+        }
+        return caseId;
+    }
+
+    /*Updates current case and navigates to next page  */
+    updateCase(caseStatus?: CaseStatus, saveButtonClicked = true): void {
+        combineLatest([
+            this.ratingRecommendationService.selectedRatingViewBy$,
+            this.ratingRecommendationService.selectedRatingRecommendationEntities$,
+            this.dataService.manageCaseDetails(caseStatus, this.entityService.selectedOrgTobeImpacted[0]?.name)
+        ])
+            .pipe(
+                first(),
+                exhaustMap(([viewBy, selectedRatingRecommendationEntities, committeeSupportWrapper]) => {
+                    if (this.isCommitteeWorkflow) {
+                        /**
+                         * @description System should not send unselected checkboxes rating classes and corresponding Debts classes to the RC memo and to the vote page
+                         */
+                        if (selectedRatingRecommendationEntities.CLASS) {
+                            committeeSupportWrapper = this.removeUnselectedRatingClasses(
+                                committeeSupportWrapper,
+                                selectedRatingRecommendationEntities
+                            );
+                        }
+
+
+
+                        if (
+                            viewBy === RatingRecommendationTableView.Debt &&
+                            selectedRatingRecommendationEntities.DEBT
+                        ) {
+                            committeeSupportWrapper = this.removeUnselectedRatingDebts(
+                                committeeSupportWrapper,
+                                selectedRatingRecommendationEntities
+                            );
+                        }
+                    }
+                    return this.casesService.updateCase(committeeSupportWrapper);
+                }),
+                tap(() => {
+                    if (caseStatus === CaseStatus.Canceled) {
+                        this.resetToHomePage();
+                    } else {
+                        this.processToastSaveButton(saveButtonClicked);
+                        this.navigate();
+                    }
+                }),
+                finalize(() => {
+                    this.enableButton();
+                })
+            )
+            .subscribe();
+    }
+
+    public processToastSaveButton(saveButtonClicked: boolean) {
+        if (saveButtonClicked) {
+            const successMessage = this.translateService.instant('navigationControl.saveToastLabel');
+            this.notificationsService.addNotification(
+                { message: null, type: NotificationType.SUCCESS },
+                null,
+                null,
+                successMessage
+            );
+        }
+    }
+
+    /*Manages save current case and download document */
+    saveAndDownload(): void {
+        this.loading$.next(true);
+        this.dataService
+            .manageCaseDetails(CaseStatus.Completed, this.entityService.selectedOrgTobeImpacted[0]?.name)
+            .pipe(
+                first(),
+                switchMap((committeeSupportWrapper) => this.casesService.updateCase(committeeSupportWrapper)),
+                tap(() => {
+                    this.onClickDownload();
+                }),
+                finalize(() => {
+                    this.enableButton();
+                }),
+                debounceTime(120000)
+            )
+            .subscribe();
+    }
+
+    /*Old Implementation For Downloading Document*/
+    onClickDownload() {
+        if (this.isJapaneseDisclosureApplicable && this.dataService.selectedTemplateType === RatingTemplate.Arf) {
+            this.popupJapaneseDisclosure();
+        } else {
+            this.initiateARFGenerationProcess();
+        }
+    }
+
+    popupJapaneseDisclosure() {
+        this.modalRef = this.modalService.open(JapanesePrDisclosurePopupComponent, {
+            onDownload: this.onJapaneseDisclosureConfirmation.bind(this)
         });
-        this.dataService.isExistingCase = true
-        this.createCommitteeSupport()
-        //  this.ratingRecommendationService.setRatingRecommendationViewType(RatingRecommendationTableView.Class);
-        this.casesService.router
-        .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
-        .then(() => {
-            this.contentLoaderService.hide();
-        })
-        .catch(error => {
-            this.contentLoaderService.hide()
-        })
+    }
 
-    }}
+    onJapaneseDisclosureConfirmation(selectedOption: JapanesePRDisclosure) {
+        this.modalRef.close();
+        this.ratingRecommendationService.updateJapaneseDisclosure(selectedOption);
+        this.initiateARFGenerationProcess();
+    }
 
+    initiateARFGenerationProcess() {
+        if (this.isRatingRecommendation) {
+            this.generationService.generateDocument(
+                this.dataService.selectedTemplateType,
+                this.isRatingCommitteeWorkflow            
+            );
+        } else {
+            this.generationService.generateArfRcmDocument(this.dataService.selectedTemplateType);
+        }
+    }
+    /* End of Old Implementation For Downloading Document*/
 
+    /*Manages forward navigation and emit continue event*/
+    handleNavigationForward(): void {
+        if (this.nextPage) {
+            this.casesService.router.navigateByUrl(this.nextPage);
+        } else if (
+            this.isDownloadStage &&
+            !this.isArfOnly &&
+            this.isCommitteeWorkflow &&
+            this.isRatingCommitteeWorkflow
+        ) {
+            this.casesService.router.navigate([
+                AppRoutes.CASE,
+                this.dataService.committeSupportWrapper.id,
+                AppRoutes.EXECUTIVE_SUMMARY
+            ]);
+        }
+        this.continueClickedEventEmitter.emit();
+    }
+
+    /*Manages back navigation and emit continue event*/
+    navBack(): void {
+        if (this.prevPage) {
+            this.casesService.router.navigateByUrl(this.prevPage);
+            this.backClickedEventEmitter.emit();
+            this.ratingRecommendationService.onProcessNavigation();
+        }
+    }
+
+    /* reset state of cases and navigates home */
+    private resetToHomePage(): void {
+        this.clearFormDataAndNavigate(AppRoutes.WORK_LIST);
+    }
+
+    private navigateTo(): void {
+        if (this.isArfDownload && !this.isArfOnly && this.isCommitteeWorkflow) {
+            return;
+        }
+        this.resetToHomePage();
+    }
+
+    ngOnDestroy(): void {
+        this.notificationsService.clearNotifications();
+        this.unSubscribe$.next();
+        this.unSubscribe$.complete();
+    }
+
+    private isSOVTemplateGroup() {
+        const sovTemplateGroup: RatingGroupType[] = [
+            RatingGroupType.SubSovereign,
+            RatingGroupType.SovereignBond,
+            RatingGroupType.SovereignMDB
+        ];
+        return sovTemplateGroup.includes(this.ratingRecommendationService.selectedRatingGroup());
+    }
+
+    private removeUnselectedRatingClasses(
+        committeeSupportWrapper: CommitteeSupport,
+        selectedRatingRecommendationEntities: SelectedRatingRecommendationEntities
+    ) {
+        committeeSupportWrapper.entities.forEach((entity) => {
+            if (entity.ratingClasses) {
+                entity.ratingClasses.forEach((ratingClass) => {
+                    ratingClass.ratings.forEach((rating) => {
+                        const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
+                            (el) => el.data.identifier === rating.identifier && el.data.immediateParent.id === entity.id
+                        );
+
+                        if (
+                            !blueTableData &&
+                            !!(rating.proposedOutlook || rating.proposedRating || rating.proposedWatchStatus)
+                        ) {
+                            rating.proposedOutlook = undefined;
+                            rating.proposedRating = undefined;
+                            rating.proposedWatchStatus = undefined;
+                        }
+                    });
+                });
+            }
+            if (entity.outlook) {
+                const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
+                    (el) => el.data.identifier === entity.outlook.identifier && el.data.immediateParent.id === entity.id
+                );
+                if (!blueTableData && !!entity.outlook.proposedOutlook) {
+                    entity.outlook.proposedOutlook = undefined;
+                }
+            }
+        });
+
+        return committeeSupportWrapper;
+    }
+
+    private removeUnselectedRatingDebts(
+        committeeSupportWrapper: CommitteeSupport,
+        selectedRatingRecommendationEntities: SelectedRatingRecommendationEntities
+    ) {
+        committeeSupportWrapper.entities.forEach((entity) => {
+            if (entity.debts) {
+                entity.debts.forEach((debt) => {
+                    debt.ratings.forEach((rating) => {
+                        const blueTableData = selectedRatingRecommendationEntities.DEBT.blueTableData.find(
+                            (el) => el.data.identifier === rating.identifier && el.data.immediateParent.id === entity.id
+                        );
+                        if (
+                            !blueTableData &&
+                            !!(rating.proposedOutlook || rating.proposedRating || rating.proposedWatchStatus)
+                        ) {
+                            rating.proposedOutlook = undefined;
+                            rating.proposedRating = undefined;
+                            rating.proposedWatchStatus = undefined;
+                        }
+                    });
+                });
+            }
+            if (entity.outlook) {
+                const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
+                    (el) => el.data.identifier === entity.outlook.identifier && el.data.immediateParent.id === entity.id
+                );
+                if (!blueTableData && !!entity.outlook.proposedOutlook) {
+                    entity.outlook.proposedOutlook = undefined;
+                }
+            }
+        });
+        return committeeSupportWrapper;
+    }
+}
