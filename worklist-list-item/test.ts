@@ -415,28 +415,47 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
 
-    private navigateToRatingRecommendationPage(){
-        this.contentLoaderService.show();
+    private navigateToRatingRecommendationPage() {
+    this.contentLoaderService.show();
+    
+    try {
+        // Create the entity dictionary first
         this.createCurrentEntityDictionary();
+        
+        // Set up the rating recommendation mode
         this.ratingRecommendationService.setRatingsTableMode({
             tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: null
+            ratingsDetails: this.selectedCaseEntityDictionary // Include the dictionary you created
         });
-        this.dataService.isExistingCase = true
-        this.createCommitteeSupport()
-        //  this.ratingRecommendationService.setRatingRecommendationViewType(RatingRecommendationTableView.Class);
-        // this.casesService.router
-        const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`
-        this.casesService.router.navigateByUrl(url)
-        .then(() => {
-            this.contentLoaderService.hide();
-        })
-        .catch(error => {
-            this.contentLoaderService.hide();
+        
+        // Set existing case flag
+        this.dataService.isExistingCase = true;
+        
+        // Create committee support
+        this.createCommitteeSupport();
+        
+        // Construct the URL
+        const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
+        
+        // Use router.navigate with skipLocationChange: false to ensure proper URL updating
+        this.router.navigate([url], { skipLocationChange: false })
+            .then(() => {
+                this.contentLoaderService.hide();
+            })
+            .catch(error => {
+                console.error('Navigation error:', error);
+                this.contentLoaderService.hide();
+                
+                // As a last resort, try direct URL navigation
+                window.location.href = url;
+            });
+    } catch (error) {
+        console.error('Error preparing navigation:', error);
+        this.contentLoaderService.hide();
+    }
+}
 
-            window.location.href = url;
-        })
-
-    }}
+   
+}
 
 
