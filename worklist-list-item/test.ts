@@ -362,51 +362,70 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.unSubscribe$.complete();
     }
 
-    private createCurrentEntityDictionary() {
-        // Clear existing dictionary before rebuilding
-        this.selectedCaseEntityDictionary = {};
-        
-        // Ensure entities exist before processing
-        if (!this.case.caseDataReference?.entities) {
-            return;
-        }
-        
-        for (const entity of this.case.caseDataReference.entities) {
-            const debt = entity.debts ?? [];
-            const ratingClass = entity.ratingClasses ?? [];
-            this.buildDictionary(entity.id, ratingClass, RatingRecommendationTableView.Class);
-            this.buildDictionary(entity.id, debt, RatingRecommendationTableView.Debt);
-        }
+private createCurrentEntityDictionary() {
+    // Clear existing dictionary before rebuilding
+    this.selectedCaseEntityDictionary = {};
+    
+    // Ensure entities exist before processing
+    if (!this.case.caseDataReference?.entities || !Array.isArray(this.case.caseDataReference.entities)) {
+        console.warn('No entities found in case data reference');
+        return;
     }
-
-    private buildDictionary<T extends { ratings: Rating[]; id: string }>(
-        entityId: string,
-        ratings: T[],
-        ratingType: RatingRecommendationTableView
-    ): void {
-        if (!ratings || !Array.isArray(ratings)) {
-            return;
+    
+    console.log(`Processing ${this.case.caseDataReference.entities.length} entities for dictionary`);
+    
+    for (const entity of this.case.caseDataReference.entities) {
+        // Skip if entity doesn't have an ID
+        if (!entity.id) {
+            console.warn('Entity without ID found, skipping');
+            continue;
         }
         
-        for (const parentRating of ratings) {
-            if (!parentRating.ratings || !Array.isArray(parentRating.ratings)) {
+        const debt = entity.debts ?? [];
+        const ratingClass = entity.ratingClasses ?? [];
+        
+        // Log for debugging
+        console.log(`Entity ${entity.id}: ${ratingClass.length} rating classes, ${debt.length} debts`);
+        
+        // Build dictionary entries for both rating classes and debts
+        this.buildDictionary(entity.id, ratingClass, RatingRecommendationTableView.Class);
+        this.buildDictionary(entity.id, debt, RatingRecommendationTableView.Debt);
+    }
+    
+    console.log(`Dictionary created with ${Object.keys(this.selectedCaseEntityDictionary).length} entries`);
+}
+
+private buildDictionary<T extends { ratings?: Rating[]; id: string }>(
+    entityId: string,
+    items: T[],
+    ratingType: RatingRecommendationTableView
+): void {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        return;
+    }
+    
+    for (const item of items) {
+        // Skip if item doesn't have ratings or ID
+        if (!item.ratings || !Array.isArray(item.ratings) || !item.id) {
+            continue;
+        }
+        
+        for (const rating of item.ratings) {
+            // Skip if rating or identifier is missing
+            if (!rating || !rating.identifier) {
                 continue;
             }
             
-            for (const rating of parentRating.ratings) {
-                if (!rating || !rating.identifier) {
-                    continue;
-                }
-                
-                const key =
-                    ratingType === RatingRecommendationTableView.Class
-                        ? generateKey(entityId, rating.identifier)
-                        : generateKey(entityId, parentRating.id, rating.identifier);
-                        
-                this.selectedCaseEntityDictionary[key] = rating;
-            }
+            // Generate appropriate key based on rating type
+            const key = ratingType === RatingRecommendationTableView.Class
+                ? generateKey(entityId, rating.identifier)
+                : generateKey(entityId, item.id, rating.identifier);
+            
+            // Store rating in dictionary
+            this.selectedCaseEntityDictionary[key] = { ...rating };
         }
     }
+}
 
     private navigateToInviteesPage() {
         this.contentLoaderService.show();
