@@ -24,7 +24,7 @@ import {
 } from '../../../features/rating-recommendation/enums/rating-recommendation.enum';
 import { CaseData } from '../../../shared/types/case-data';
 import { CasesService, CaseStatus } from '../../../shared/services/cases';
-import { Subject, of } from 'rxjs';
+import { Subject, catchError, of } from 'rxjs';
 import { generateKey, Rating } from '../../../features/rating-recommendation';
 import { UltimateParent } from '../../../shared/models/UltimateParent';
 import { RatingGroupType } from 'src/app/shared/models/RatingGroupType';
@@ -410,77 +410,88 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     private navigateToInviteesPage() {
         this.contentLoaderService.show();
-        this.router.navigate([`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`])
+        // Force navigation to complete by using a direct window.location approach if needed
+        const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`;
+        this.router.navigate([url.split('/').filter(segment => segment)])
             .then(() => {
                 this.contentLoaderService.hide();
             })
             .catch(error => {
                 console.error('Navigation error:', error);
                 this.contentLoaderService.hide();
+                window.location.href = url;
             });
     }
 
     private navigateToAuthoringPage() {
         this.contentLoaderService.show();
-        this.router.navigate([`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`])
+        const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`;
+        this.router.navigate([url.split('/').filter(segment => segment)])
             .then(() => {
                 this.contentLoaderService.hide();
             })
             .catch(error => {
                 console.error('Navigation error:', error);
                 this.contentLoaderService.hide();
+                window.location.href = url;
             });
     }
 
     private navigateToRatingRecommendationPage() {
+        // Show the content loader before starting any work
         this.contentLoaderService.show();
         
         try {
-            // Set up necessary data before navigation
+            // Step 1: Create the entity dictionary
             this.createCurrentEntityDictionary();
             
-            // Set the table mode for rating recommendation
+            // Step 2: Set the table mode
             this.ratingRecommendationService.setRatingsTableMode({
                 tableMode: RatingsTableMode.EditRecommendation,
                 ratingsDetails: this.selectedCaseEntityDictionary
             });
             
-            // Flag as existing case
+            // Step 3: Set data service flags
             this.dataService.isExistingCase = true;
             
-            // Set up committee support
+            // Step 4: Create committee support
+            if (!this.dataService.committeSupportWrapper) {
+                console.warn('Committee support wrapper not found, creating one now');
+                this.dataService.committeSupportWrapper = this.dataService.committeSupportWrapper || {};
+            }
+            
             this.createCommitteeSupport();
             
-            // Mark case as having rating recommendation
+            // Step 5: Mark case as having rating recommendation
             if (this.dataService.committeSupportWrapper) {
                 this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
             }
             
-            // Prepare URL for navigation
+            // Prepare route parameters
             const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
+            const urlSegments = url.split('/').filter(segment => segment);
             
-            // Use navigate instead of navigateByUrl for better error handling
-            this.router.navigate([url.split('/').filter(segment => segment)])
-                .then(() => {
-                    console.log('Successfully navigated to Rating Recommendation');
-                    this.contentLoaderService.hide();
-                })
-                .catch(error => {
-                    console.error('Navigation error:', error);
-                    this.contentLoaderService.hide();
-                    
-                    // As a last resort fallback
-                    setTimeout(() => {
+            // Step 6: Use location.href as a fallback but try router first
+            setTimeout(() => {
+                this.router.navigate(urlSegments)
+                    .then(() => {
+                        console.log('Successfully navigated to Rating Recommendation');
+                        this.contentLoaderService.hide();
+                    })
+                    .catch(error => {
+                        console.error('Router navigation failed:', error);
+                        this.contentLoaderService.hide();
+                        
+                        // Force navigation using browser API as fallback
                         window.location.href = url;
-                    }, 100);
-                });
+                    });
+            }, 0);
         } catch (error) {
-            console.error('Error preparing for navigation:', error);
+            console.error('Error in rating recommendation navigation:', error);
             this.contentLoaderService.hide();
             
-            // Final fallback
-            const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-            window.location.href = url;
+            // Use direct navigation as last resort
+            window.location.href = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
         }
     }
 }
