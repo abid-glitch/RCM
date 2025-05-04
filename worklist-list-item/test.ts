@@ -88,7 +88,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
     // isshowRatingRecommendation = true;
-    showRatingRecommendationOption = true;
+    showRatingRecommendationOption = false;
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -327,7 +327,24 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
 
-        this.case.showRatingRecommendation = hasProposedRating 
+        // this.case.showRatingRecommendation = hasProposedRating 
+        // this.showRatingRecommendationOption = hasProposedRating && (
+        //     !!localStorage.getItem(`case-${this.case.id}-saved`) ||
+        //     !!this.case.caseDataReference?.lastSaveAndDownloadDate
+        // )
+
+        // const isSavedCase = this.case.caseDataReference?.lastSaveAndDownloadDate ||
+        // this.case.caseDataReference?.status !== CaseStatus.Initiated
+
+
+        const isSavedCase = this.ratingRecommendationService.isCaseSaved(this.case.id) || 
+        this.case.caseDataReference?.status !== CaseStatus.Initiated || 
+        !!this.case.caseDataReference?.lastSaveAndDownloadDate;
+
+                this.case.showRatingRecommendation = hasProposedRating;
+        this.showRatingRecommendationOption = hasProposedRating && isSavedCase
+
+
         // this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
 
 
@@ -400,16 +417,21 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     private navigateToRatingRecommendationPage(){
         this.contentLoaderService.show();
+        this.createCurrentEntityDictionary();
         this.ratingRecommendationService.setRatingsTableMode({
             tableMode: RatingsTableMode.EditRecommendation,
             ratingsDetails: null
         });
-        this.createCurrentEntityDictionary();
+        this.dataService.isExistingCase = true
+        this.createCommitteeSupport()
         //  this.ratingRecommendationService.setRatingRecommendationViewType(RatingRecommendationTableView.Class);
         this.casesService.router
         .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
         .then(() => {
             this.contentLoaderService.hide();
+        })
+        .catch(error => {
+            this.contentLoaderService.hide()
         })
 
     }}
