@@ -457,60 +457,71 @@ private buildDictionary<T extends { ratings?: Rating[]; id: string }>(
     }
 
     private navigateToRatingRecommendationPage() {
-        // Show the content loader before starting any work
-        this.contentLoaderService.show();
+    // Show the content loader before starting any work
+    this.contentLoaderService.show();
+    
+    try {
+        // Step 1: Create the entity dictionary
+        this.createCurrentEntityDictionary();
         
-        try {
-            // Step 1: Create the entity dictionary
-            this.createCurrentEntityDictionary();
-            
-            // Step 2: Set the table mode
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode: RatingsTableMode.EditRecommendation,
-                ratingsDetails: this.selectedCaseEntityDictionary
-            });
-            
-            // Step 3: Set data service flags
-            this.dataService.isExistingCase = true;
-            
-            // Step 4: Create committee support
-            if (!this.dataService.committeSupportWrapper) {
-                console.warn('Committee support wrapper not found, creating one now');
-                this.dataService.committeSupportWrapper = this.dataService.committeSupportWrapper || {};
-            }
-            
-            this.createCommitteeSupport();
-            
-            // Step 5: Mark case as having rating recommendation
-            if (this.dataService.committeSupportWrapper) {
-                this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
-            }
-            
-            // Prepare route parameters
-            const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-            const urlSegments = url.split('/').filter(segment => segment);
-            
-            // Step 6: Use location.href as a fallback but try router first
-            setTimeout(() => {
+        // Step 2: Set the table mode
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: this.selectedCaseEntityDictionary
+        });
+        
+        // Step 3: Set data service flags
+        this.dataService.isExistingCase = true;
+        
+        // Step 4: Create committee support wrapper if it doesn't exist
+        if (!this.dataService.committeSupportWrapper) {
+            console.log('Creating new committee support wrapper');
+            this.dataService.initializeCommitteeSupportWrapper();
+        }
+        
+        // Step 5: Set up the committee support data
+        this.createCommitteeSupport();
+        
+        // Step 6: Mark as having rating recommendation
+        this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
+        
+        // Step 7: Prepare case data for navigation
+        this.casesService.getCaseById(this.case.id)
+            .pipe(
+                // Handle potential errors to prevent navigation failures
+                catchError(error => {
+                    console.error('Error fetching case data:', error);
+                    return of(this.case);
+                }),
+                // Use a finalize to ensure content loader is hidden even if there's an error
+                finalize(() => {
+                    this.contentLoaderService.hide();
+                }),
+                // Clean up the subscription
+                takeUntil(this.unSubscribe$)
+            )
+            .subscribe(caseData => {
+                // Step 8: Navigate with proper route parameters
+                const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
+                const urlSegments = url.split('/').filter(segment => segment);
+                
+                // Attempt to use the Angular router first
                 this.router.navigate(urlSegments)
                     .then(() => {
                         console.log('Successfully navigated to Rating Recommendation');
-                        this.contentLoaderService.hide();
                     })
                     .catch(error => {
                         console.error('Router navigation failed:', error);
-                        this.contentLoaderService.hide();
                         
-                        // Force navigation using browser API as fallback
+                        // Fall back to direct navigation as a last resort
                         window.location.href = url;
                     });
-            }, 0);
-        } catch (error) {
-            console.error('Error in rating recommendation navigation:', error);
-            this.contentLoaderService.hide();
-            
-            // Use direct navigation as last resort
-            window.location.href = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-        }
+            });
+    } catch (error) {
+        console.error('Error preparing for navigation:', error);
+        this.contentLoaderService.hide();
+        
+        // Simple fallback if something goes catastrophically wrong
+        alert('An error occurred while preparing to navigate. Please try again.');
     }
 }
