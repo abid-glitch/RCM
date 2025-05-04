@@ -24,7 +24,7 @@ import {
 } from '../../../features/rating-recommendation/enums/rating-recommendation.enum';
 import { CaseData } from '../../../shared/types/case-data';
 import { CasesService, CaseStatus } from '../../../shared/services/cases';
-import { Subject } from 'rxjs';
+import { Subject, of } from 'rxjs';
 import { generateKey, Rating } from '../../../features/rating-recommendation';
 import { UltimateParent } from '../../../shared/models/UltimateParent';
 import { RatingGroupType } from 'src/app/shared/models/RatingGroupType';
@@ -87,8 +87,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
-    // isshowRatingRecommendation = true;
     showRatingRecommendationOption = false;
+    
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -129,12 +129,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.navigateToInviteesPage();
         } else if (value === 'Authoring') {
             this.navigateToAuthoringPage();
-        }
-
-        else if (value === 'Rating Recommendation'){
+        } else if (value === 'Rating Recommendation') {
             this.navigateToRatingRecommendationPage();
         }
-        
     }
 
     goToEntitySelection() {
@@ -143,7 +140,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.dataService.isExistingCase = true;
         this.prepareTransition();
     }
-
 
     prepareTransition() {
         this.clearEntity();
@@ -217,8 +213,10 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         const entityFamilyNode: EntityFamilyNode[] = [];
         this.case.caseDataReference.entities.forEach((element) => {
             const entityFamily = new EntityFamilyNode(element);
-            const leadAnalyst = element.analysts?.find((analyst) => analyst.role === AnalystRole.leadAnalyst).analyst;
-            entityFamily.leadAnalyst?.push(leadAnalyst);
+            const leadAnalyst = element.analysts?.find((analyst) => analyst.role === AnalystRole.leadAnalyst)?.analyst;
+            if (leadAnalyst) {
+                entityFamily.leadAnalyst?.push(leadAnalyst);
+            }
             entityFamilyNode.push(entityFamily);
         });
         this.entityService.addOrgToImpactedList(entityFamilyNode, true);
@@ -243,8 +241,10 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
             const leadAnalyst = selectedEntity.analysts?.find(
                 (analyst) => analyst.role === AnalystRole.leadAnalyst
-            ).analyst;
-            entityFamily.leadAnalyst?.push(leadAnalyst);
+            )?.analyst;
+            if (leadAnalyst) {
+                entityFamily.leadAnalyst?.push(leadAnalyst);
+            }
             entityFamilyNode.push(entityFamily);
         });
         this.entityService.addOrgToImpactedList(entityFamilyNode, true);
@@ -319,35 +319,23 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             )
         );
 
-        // this.showRatingRecommendation = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
         const isRatingCommitteeWorkflow =
             (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
             (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
+        
         this.case.showAuthoring =
             hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
 
-        // this.case.showRatingRecommendation = hasProposedRating 
-        // this.showRatingRecommendationOption = hasProposedRating && (
-        //     !!localStorage.getItem(`case-${this.case.id}-saved`) ||
-        //     !!this.case.caseDataReference?.lastSaveAndDownloadDate
-        // )
+        // Check if case is saved using any of the available indicators
+        const isSavedCase = 
+            this.ratingRecommendationService.isCaseSaved(this.case.id) || 
+            this.case.caseDataReference?.status !== CaseStatus.Initiated || 
+            !!this.case.caseDataReference?.lastSaveAndDownloadDate;
 
-        // const isSavedCase = this.case.caseDataReference?.lastSaveAndDownloadDate ||
-        // this.case.caseDataReference?.status !== CaseStatus.Initiated
-
-
-        const isSavedCase = this.ratingRecommendationService.isCaseSaved(this.case.id) || 
-        this.case.caseDataReference?.status !== CaseStatus.Initiated || 
-        !!this.case.caseDataReference?.lastSaveAndDownloadDate;
-
-                this.case.showRatingRecommendation = hasProposedRating;
-        this.showRatingRecommendationOption = hasProposedRating && isSavedCase
-
-
-        // this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
-
-
+        // Set visibility flags
+        this.case.showRatingRecommendation = hasProposedRating;
+        this.showRatingRecommendationOption = hasProposedRating && isSavedCase;
     }
 
     isRatingCommitteeWorkflowEnabledSOV() {
@@ -357,12 +345,14 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.SovereignMDB
         );
     }
+    
     isRatingCommitteeWorkflowEnabledFIG() {
         return (
             this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.BankingFinanceSecurities ||
             this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.NonBanking
         );
     }
+    
     isRatingCommitteeWorkflowEnabledCFG() {
         return this.case.caseDataReference.ratingGroupTemplate === RatingGroupType.CFG;
     }
@@ -373,6 +363,14 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     private createCurrentEntityDictionary() {
+        // Clear existing dictionary before rebuilding
+        this.selectedCaseEntityDictionary = {};
+        
+        // Ensure entities exist before processing
+        if (!this.case.caseDataReference?.entities) {
+            return;
+        }
+        
         for (const entity of this.case.caseDataReference.entities) {
             const debt = entity.debts ?? [];
             const ratingClass = entity.ratingClasses ?? [];
@@ -386,12 +384,25 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         ratings: T[],
         ratingType: RatingRecommendationTableView
     ): void {
+        if (!ratings || !Array.isArray(ratings)) {
+            return;
+        }
+        
         for (const parentRating of ratings) {
+            if (!parentRating.ratings || !Array.isArray(parentRating.ratings)) {
+                continue;
+            }
+            
             for (const rating of parentRating.ratings) {
+                if (!rating || !rating.identifier) {
+                    continue;
+                }
+                
                 const key =
                     ratingType === RatingRecommendationTableView.Class
                         ? generateKey(entityId, rating.identifier)
                         : generateKey(entityId, parentRating.id, rating.identifier);
+                        
                 this.selectedCaseEntityDictionary[key] = rating;
             }
         }
@@ -399,63 +410,77 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     private navigateToInviteesPage() {
         this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`)
-            .then(() => {
-                this.contentLoaderService.hide();
-            });
-    }
-
-    private navigateToAuthoringPage() {
-        this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`)
-            .then(() => {
-                this.contentLoaderService.hide();
-            });
-    }
-
-    private navigateToRatingRecommendationPage() {
-    this.contentLoaderService.show();
-    
-    try {
-        // Create the entity dictionary first
-        this.createCurrentEntityDictionary();
-        
-        // Set up the rating recommendation mode
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary // Include the dictionary you created
-        });
-        
-        // Set existing case flag
-        this.dataService.isExistingCase = true;
-        
-        // Create committee support
-        this.createCommitteeSupport();
-        
-        // Construct the URL
-        const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-        
-        // Use router.navigate with skipLocationChange: false to ensure proper URL updating
-        this.router.navigate([url], { skipLocationChange: false })
+        this.router.navigate([`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RC_INVITEES}`])
             .then(() => {
                 this.contentLoaderService.hide();
             })
             .catch(error => {
                 console.error('Navigation error:', error);
                 this.contentLoaderService.hide();
-                
-                // As a last resort, try direct URL navigation
-                window.location.href = url;
             });
-    } catch (error) {
-        console.error('Error preparing navigation:', error);
-        this.contentLoaderService.hide();
+    }
+
+    private navigateToAuthoringPage() {
+        this.contentLoaderService.show();
+        this.router.navigate([`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`])
+            .then(() => {
+                this.contentLoaderService.hide();
+            })
+            .catch(error => {
+                console.error('Navigation error:', error);
+                this.contentLoaderService.hide();
+            });
+    }
+
+    private navigateToRatingRecommendationPage() {
+        this.contentLoaderService.show();
+        
+        try {
+            // Set up necessary data before navigation
+            this.createCurrentEntityDictionary();
+            
+            // Set the table mode for rating recommendation
+            this.ratingRecommendationService.setRatingsTableMode({
+                tableMode: RatingsTableMode.EditRecommendation,
+                ratingsDetails: this.selectedCaseEntityDictionary
+            });
+            
+            // Flag as existing case
+            this.dataService.isExistingCase = true;
+            
+            // Set up committee support
+            this.createCommitteeSupport();
+            
+            // Mark case as having rating recommendation
+            if (this.dataService.committeSupportWrapper) {
+                this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
+            }
+            
+            // Prepare URL for navigation
+            const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
+            
+            // Use navigate instead of navigateByUrl for better error handling
+            this.router.navigate([url.split('/').filter(segment => segment)])
+                .then(() => {
+                    console.log('Successfully navigated to Rating Recommendation');
+                    this.contentLoaderService.hide();
+                })
+                .catch(error => {
+                    console.error('Navigation error:', error);
+                    this.contentLoaderService.hide();
+                    
+                    // As a last resort fallback
+                    setTimeout(() => {
+                        window.location.href = url;
+                    }, 100);
+                });
+        } catch (error) {
+            console.error('Error preparing for navigation:', error);
+            this.contentLoaderService.hide();
+            
+            // Final fallback
+            const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
+            window.location.href = url;
+        }
     }
 }
-
-   
-}
-
-
