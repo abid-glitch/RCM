@@ -417,48 +417,52 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
 private navigateToRatingRecommendationPage() {
     this.contentLoaderService.show();
-    
-    if (!this.case || !this.case.id) {
-        console.error('Cannot navigate: Case or case ID is missing');
-        this.contentLoaderService.hide();
-        this.notificationService.showError('Cannot load recommendation: Case information is missing.');
-        return;
-    }
+    console.log('[Navigation] Starting navigation with case ID:', this.case?.id);
     
     try {
-        // Create a complete case state object with all needed data
-        const caseState = {
-            id: this.case.id,
-            entityDictionary: this.createCurrentEntityDictionary(),
-            caseDataReference: this.case.caseDataReference,
-            // Add any other needed case data
-        };
+        // Check if case exists
+        if (!this.case || !this.case.id) {
+            console.error('[Navigation] Case or case ID is undefined');
+            this.contentLoaderService.hide();
+            return;
+        }
+
+        console.log('[Navigation] Creating entity dictionary');
+        this.createCurrentEntityDictionary();
+        console.log('[Navigation] Entity dictionary created:', this.selectedCaseEntityDictionary);
         
-        // Store complete state in service
-        this.ratingRecommendationService.setCaseState(caseState);
+        console.log('[Navigation] Setting ratings table mode');
+        this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.ViewRecommendation,
+            ratingsDetails: this.selectedCaseEntityDictionary
+        });
         
-        // Store minimal required info in localStorage
+        console.log('[Navigation] Storing case ID:', this.case.id);
+        this.ratingRecommendationService.setSelectedCaseId(this.case.id);
+        
+        console.log('[Navigation] Setting case data reference');
+        this.dataService.isExistingCase = true;
+        this.dataService.setCaseData(this.case.caseDataReference);
+        
+        console.log('[Navigation] Setting localStorage for case:', this.case.id);
         localStorage.setItem(`case-${this.case.id}-saved`, 'true');
-        localStorage.setItem(`current-case-id`, this.case.id);
         
-        // Navigate with ID parameter
         const targetUrl = `${AppRoutes.RATING_RECOMMENDATION}/${this.case.id}`;
+        console.log('[Navigation] Navigating to:', targetUrl);
         
         this.casesService.router
             .navigateByUrl(targetUrl)
             .then(() => {
-                console.log('Navigation successful');
+                console.log('[Navigation] Navigation completed successfully');
                 this.contentLoaderService.hide();
             })
             .catch(error => {
-                console.error('Navigation error:', error);
+                console.error('[Navigation] Navigation error:', error);
                 this.contentLoaderService.hide();
-                this.notificationService.showError('Navigation failed. Please try again.');
             });
     } catch (error) {
-        console.error('Error preparing navigation:', error);
+        console.error('[Navigation] Error in navigation method:', error);
         this.contentLoaderService.hide();
-        this.notificationService.showError('An error occurred. Please try again.');
     }
 }
 
