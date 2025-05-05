@@ -415,56 +415,42 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
 
-private navigateToRatingRecommendationPage() {
-    this.contentLoaderService.show();
-    console.log('[Navigation] Starting navigation with case ID:', this.case?.id);
-    
-    try {
-        // Check if case exists
-        if (!this.case || !this.case.id) {
-            console.error('[Navigation] Case or case ID is undefined');
+ private navigateToRatingRecommendationPage() {
+        this.contentLoaderService.show();
+        console.log('[Navigation] Starting navigation with case ID:', this.case?.id);
+        
+        try {
+            // Check if case exists
+            if (!this.case || !this.case.id) {
+                console.error('[Navigation] Case or case ID is undefined');
+                this.contentLoaderService.hide();
+                return;
+            }
+            
+            console.log('[Navigation] Storing case ID:', this.case.id);
+            const url = this.ratingRecommendationService.isCaseSaved(this.case.id);
+            
+            console.log('[Navigation] Setting localStorage for case:', this.case.id);
+            localStorage.setItem(`case-${this.case.id}-saved`, 'true');
+            
+            const targetUrl = `${AppRoutes.RATING_RECOMMENDATION}/${url}`;
+            console.log('[Navigation] Navigating to:', targetUrl);
+            
+            this.casesService.router
+                .navigateByUrl(targetUrl)
+                .then(() => {
+                    console.log('[Navigation] Navigation completed successfully');
+                    this.contentLoaderService.hide();
+                })
+                .catch(error => {
+                    console.error('[Navigation] Navigation error:', error);
+                    this.contentLoaderService.hide();
+                });
+        } catch (error) {
+            console.error('[Navigation] Error in navigation method:', error);
             this.contentLoaderService.hide();
-            return;
         }
-
-        console.log('[Navigation] Creating entity dictionary');
-        this.createCurrentEntityDictionary();
-        console.log('[Navigation] Entity dictionary created:', this.selectedCaseEntityDictionary);
-        
-        console.log('[Navigation] Setting ratings table mode');
-        this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.ViewRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-        });
-        
-        console.log('[Navigation] Storing case ID:', this.case.id);
-        this.ratingRecommendationService.setSelectedCaseId(this.case.id);
-        
-        console.log('[Navigation] Setting case data reference');
-        this.dataService.isExistingCase = true;
-        this.dataService.setCaseData(this.case.caseDataReference);
-        
-        console.log('[Navigation] Setting localStorage for case:', this.case.id);
-        localStorage.setItem(`case-${this.case.id}-saved`, 'true');
-        
-        const targetUrl = `${AppRoutes.RATING_RECOMMENDATION}/${this.case.id}`;
-        console.log('[Navigation] Navigating to:', targetUrl);
-        
-        this.casesService.router
-            .navigateByUrl(targetUrl)
-            .then(() => {
-                console.log('[Navigation] Navigation completed successfully');
-                this.contentLoaderService.hide();
-            })
-            .catch(error => {
-                console.error('[Navigation] Navigation error:', error);
-                this.contentLoaderService.hide();
-            });
-    } catch (error) {
-        console.error('[Navigation] Error in navigation method:', error);
-        this.contentLoaderService.hide();
     }
-}
 
 }
 
