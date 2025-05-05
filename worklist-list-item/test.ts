@@ -341,7 +341,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.case.caseDataReference?.status !== CaseStatus.Initiated || 
         !!this.case.caseDataReference?.lastSaveAndDownloadDate;
 
-        this.case.showRatingRecommendation = hasProposedRating;
+        // this.case.showRatingRecommendation = hasProposedRating;
         this.isshowRatingRecommendation = hasProposedRating && isSavedCase
 
 
@@ -415,76 +415,54 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
 
-    private navigateToRatingRecommendationPage() {
-        // Show the content loader before starting any work
-        this.contentLoaderService.show();
+private navigateToRatingRecommendationPage() {
+    this.contentLoaderService.show();
+    
+    if (!this.case || !this.case.id) {
+        console.error('Cannot navigate: Case or case ID is missing');
+        this.contentLoaderService.hide();
+        this.notificationService.showError('Cannot load recommendation: Case information is missing.');
+        return;
+    }
+    
+    try {
+        // Create a complete case state object with all needed data
+        const caseState = {
+            id: this.case.id,
+            entityDictionary: this.createCurrentEntityDictionary(),
+            caseDataReference: this.case.caseDataReference,
+            // Add any other needed case data
+        };
         
-        try {
-            // Step 1: Create the entity dictionary
-            this.createCurrentEntityDictionary();
-            
-            // Step 2: Set the table mode
-            this.ratingRecommendationService.setRatingsTableMode({
-                tableMode: RatingsTableMode.EditRecommendation,
-                ratingsDetails: this.selectedCaseEntityDictionary
+        // Store complete state in service
+        this.ratingRecommendationService.setCaseState(caseState);
+        
+        // Store minimal required info in localStorage
+        localStorage.setItem(`case-${this.case.id}-saved`, 'true');
+        localStorage.setItem(`current-case-id`, this.case.id);
+        
+        // Navigate with ID parameter
+        const targetUrl = `${AppRoutes.RATING_RECOMMENDATION}/${this.case.id}`;
+        
+        this.casesService.router
+            .navigateByUrl(targetUrl)
+            .then(() => {
+                console.log('Navigation successful');
+                this.contentLoaderService.hide();
+            })
+            .catch(error => {
+                console.error('Navigation error:', error);
+                this.contentLoaderService.hide();
+                this.notificationService.showError('Navigation failed. Please try again.');
             });
-            
-            // Step 3: Set data service flags
-            this.dataService.isExistingCase = true;
-            
-            // Step 4: Create committee support wrapper if it doesn't exist
-            if (!this.dataService.committeSupportWrapper) {
-                console.log('Creating new committee support wrapper');
-                // this.dataService.initializeCommitteeSupportWrapper();
-            }
-            
-            // Step 5: Set up the committee support data
-            this.createCommitteeSupport();
-            
-            // Step 6: Mark as having rating recommendation
-            this.dataService.committeSupportWrapper.hasRatingRecommendation = true;
-            
-            // Step 7: Prepare case data for navigation
-            this.casesService.getCaseById(this.case.id)
-                .pipe(
-                    // Handle potential errors to prevent navigation failures
-                    catchError(error => {
-                        console.error('Error fetching case data:', error);
-                        return of(this.case);
-                    }),
-                    // Use a finalize to ensure content loader is hidden even if there's an error
-                    finalize(() => {
-                        this.contentLoaderService.hide();
-                    }),
-                    // Clean up the subscription
-                    takeUntil(this.unSubscribe$)
-                )
-                .subscribe(caseData => {
-                    // Step 8: Navigate with proper route parameters
-                    const url = `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`;
-                    const urlSegments = url.split('/').filter(segment => segment);
-                    
-                    // Attempt to use the Angular router first
-                    this.router.navigate(urlSegments)
-                        .then(() => {
-                            console.log('Successfully navigated to Rating Recommendation');
-                        })
-                        .catch(error => {
-                            console.error('Router navigation failed:', error);
-                            
-                            // Fall back to direct navigation as a last resort
-                            window.location.href = url;
-                        });
-                });
-        } catch (error) {
-            console.error('Error preparing for navigation:', error);
-            this.contentLoaderService.hide();
-            
-            // Simple fallback if something goes catastrophically wrong
-            alert('An error occurred while preparing to navigate. Please try again.');
-        }
+    } catch (error) {
+        console.error('Error preparing navigation:', error);
+        this.contentLoaderService.hide();
+        this.notificationService.showError('An error occurred. Please try again.');
+    }
+}
 
-    }}
+}
 
 
 
