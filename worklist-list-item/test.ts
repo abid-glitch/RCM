@@ -415,65 +415,79 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
 
- private navigateToRatingRecommendationPage() {
-    this.contentLoaderService.show();
-    
-    this.casesService.getCaseById(this.case.id)
-        .pipe(
-            tap(committeeSupport => {
-                console.log('Case data loaded:', committeeSupport);
-                
-                // Store the committee support data in the data service
-                this.dataService.committeSupportWrapper = committeeSupport;
-                
-                // Create entity dictionary for rating details
-                this.createCurrentEntityDictionary();
-                
-                // Set table mode
-                this.ratingRecommendationService.setRatingsTableMode({
-                    tableMode: RatingsTableMode.EditRecommendation,
-                    ratingsDetails: this.selectedCaseEntityDictionary
-                });
-                
-                // Make sure entities are properly loaded
-                // This is critical for displaying table data
-                if (committeeSupport.entities?.length) {
-                    console.log('Setting entities in subject:', committeeSupport.entities);
-                    
-                    // Ensure entities have all required properties
-                    const processedEntities = committeeSupport.entities.map(entity => {
-                        // Make sure each entity has all required properties
-                        return {
-                            ...entity,
-                            // Add any missing properties needed for display
-                            hasRatingRecommendation: true
-                        };
-                    });
-                    
-                    // Explicitly set hasRatingRecommendation flag which might be causing the issue
-                    committeeSupport.hasRatingRecommendation = true;
-                    
-                    // Update entities in the service
-                    this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
-                } else {
-                    console.warn('No entities found in case data');
-                }
-            }),
-            finalize(() => {
-                this.contentLoaderService.hide();
-                // Navigate after ensuring data is ready
-                setTimeout(() => {
-                    this.casesService.router.navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`);
-                }, 100); // Small delay to ensure data is processed
-            })
-        )
-        .subscribe(
-            () => console.log('Navigation preparation complete'),
-            error => {
-                console.error('Error preparing for navigation:', error);
-                this.contentLoaderService.hide();
-            }
+private navigateToRatingRecommendationPage() {
+  this.contentLoaderService.show();
+  
+  this.casesService.getCaseById(this.case.id)
+    .pipe(
+      tap(committeeSupport => {
+        console.log('Case data loaded:', committeeSupport);
+        
+        // Store the committee support data in the data service
+        this.dataService.committeSupportWrapper = committeeSupport;
+        
+        // Create entity dictionary for rating details
+        this.createCurrentEntityDictionary();
+        
+        // Ensure entities have the structure expected by the service
+        if (committeeSupport.entities?.length) {
+          // Process entities with all required properties
+          const processedEntities = committeeSupport.entities.map(entity => ({
+            ...entity,
+            // Ensure these properties exist for the service logic
+            ratingClasses: entity.ratingClasses || [],
+            debts: entity.debts || [],
+            outlook: entity.outlook || null,
+            hasRatingRecommendation: true
+          }));
+          
+          // First update the data service with properly structured entities
+          this.dataService.updateSelectedEntities(processedEntities);
+          
+          // Then set the table mode - AFTER entities are set
+          this.ratingRecommendationService.setRatingsTableMode({
+            tableMode: RatingsTableMode.EditRecommendation,
+            ratingsDetails: this.selectedCaseEntityDictionary
+          });
+          
+          // Next update the entities subject
+          this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
+          
+          // Explicitly initialize the ratings data stream
+          // This is critical - in the service code, this calls getAllEntityRatingRecommendation$.pipe(take(1)).subscribe()
+          this.ratingRecommendationService.initializeRatingRecommendationDataStream();
+          
+          // Set default view based on rating group
+          if (this.ratingRecommendationService.checkIfRatingGroupIsAllowedForClassView()) {
+            this.ratingRecommendationService.determineDefaultView();
+          }
+        } else {
+          console.warn('No entities found in case data');
+        }
+      }),
+      // Wait for the initial data stream to complete
+      switchMap(() => this.ratingRecommendationService.getAllEntityRatingRecommendation$.pipe(
+        take(1),
+        catchError(err => {
+          console.error('Error initializing rating recommendation data:', err);
+          return of(null);
+        })
+      )),
+      finalize(() => {
+        this.contentLoaderService.hide();
+        // Navigate after ensuring data is ready and processed
+        this.casesService.router.navigateByUrl(
+          `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`
         );
+      })
+    )
+    .subscribe(
+      () => console.log('Navigation preparation complete and data initialized'),
+      error => {
+        console.error('Error preparing for navigation:', error);
+        this.contentLoaderService.hide();
+      }
+    );
 }}
 
 
