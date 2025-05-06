@@ -474,8 +474,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 this.contentLoaderService.hide();
             }
         );
-}
-}
+}}
 
 
 
