@@ -423,71 +423,98 @@ private navigateToRatingRecommendationPage() {
       tap(committeeSupport => {
         console.log('Case data loaded:', committeeSupport);
         
-        // Store the committee support data in the data service
+        // 1. Store the committee support data in the data service
         this.dataService.committeSupportWrapper = committeeSupport;
         
-        // Create entity dictionary for rating details
+        // 2. Create entity dictionary for rating details
         this.createCurrentEntityDictionary();
-        
-        // Ensure entities have the structure expected by the service
+
+        // 3. Process entities to ensure they have the right structure
         if (committeeSupport.entities?.length) {
-          // Process entities with all required properties
           const processedEntities = committeeSupport.entities.map(entity => ({
             ...entity,
-            // Ensure these properties exist for the service logic
             ratingClasses: entity.ratingClasses || [],
             debts: entity.debts || [],
             outlook: entity.outlook || null,
+            rated: entity.rated || false,
             hasRatingRecommendation: true
           }));
           
-          // First update the data service with properly structured entities
+          // 4. Update the data service with structured entities
           this.dataService.updateSelectedEntities(processedEntities);
           
-          // Then set the table mode - AFTER entities are set
+          // 5. Set table mode BEFORE setting the entities subject
           this.ratingRecommendationService.setRatingsTableMode({
             tableMode: RatingsTableMode.EditRecommendation,
             ratingsDetails: this.selectedCaseEntityDictionary
           });
           
-          // Next update the entities subject
+          // 6. Check if FIG banking rating group for any special handling
+          const isFigBankingGroup = this.checkIfFigBankingRatingGroup(committeeSupport);
+          this.ratingRecommendationService.isFigBankingRatingGroup$.next(isFigBankingGroup);
+          
+          // 7. Set selected template if needed
+          const template = this.determineTemplate(committeeSupport);
+          if (template) {
+            this.ratingRecommendationService.selectedTemplateSubject.next(template);
+          }
+          
+          // 8. Set default view based on rating group
+          this.ratingRecommendationService.determineDefaultView();
+          
+          // 9. Update the entities subject - this triggers the data pipeline
           this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
           
-          // Explicitly initialize the ratings data stream
-          // This is critical - in the service code, this calls getAllEntityRatingRecommendation$.pipe(take(1)).subscribe()
+          // 10. Explicitly initialize the ratings data stream
           this.ratingRecommendationService.initializeRatingRecommendationDataStream();
-          
-          // Set default view based on rating group
-          if (this.ratingRecommendationService.checkIfRatingGroupIsAllowedForClassView()) {
-            this.ratingRecommendationService.determineDefaultView();
-          }
         } else {
           console.warn('No entities found in case data');
         }
       }),
-      // Wait for the initial data stream to complete
-      switchMap(() => this.ratingRecommendationService.getAllEntityRatingRecommendation$.pipe(
-        take(1),
-        catchError(err => {
-          console.error('Error initializing rating recommendation data:', err);
-          return of(null);
-        })
-      )),
+      // 11. Wait for the data to be processed before navigating
+      switchMap(() => 
+        this.ratingRecommendationService.getAllEntityRatingRecommendation$.pipe(
+          take(1),
+          catchError(err => {
+            console.error('Error loading rating recommendation data:', err);
+            return of(null);
+          })
+        )
+      ),
+      // 12. After data is loaded, complete navigation
       finalize(() => {
         this.contentLoaderService.hide();
-        // Navigate after ensuring data is ready and processed
         this.casesService.router.navigateByUrl(
           `${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`
         );
       })
     )
     .subscribe(
-      () => console.log('Navigation preparation complete and data initialized'),
+      () => console.log('Rating recommendation data loaded and navigation complete'),
       error => {
-        console.error('Error preparing for navigation:', error);
+        console.error('Error preparing rating recommendation data:', error);
         this.contentLoaderService.hide();
+        // Show error notification to user
+        this.notificationsService.errorNotification('Failed to load rating recommendation data');
       }
     );
+}
+
+// Helper methods:
+private checkIfFigBankingRatingGroup(committeeSupport): boolean {
+  const figBankingRatingGroups = [
+    'BankingFinanceSecurities',
+    'Insurance',
+    'NonBanking'
+    // Add any other FIG banking rating groups
+  ];
+  return figBankingRatingGroups.includes(committeeSupport.ratingGroupType);
+}
+
+private determineTemplate(committeeSupport): string {
+  // Implement logic to determine the template based on committee support data
+  // Return the appropriate template string value
+  return committeeSupport.templateType || null;
 }}
 
 
