@@ -71,6 +71,12 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
 
+        // Get the entity data from the entityService or dataService
+        this.entity = this.entityService.getEntities(); // Ensure this method exists or use appropriate method
+        
+        // Initialize country ceiling data
+        this.initializeCountryCeilings();
+
         this.updateCRQT$
             .pipe(
                 filter((status) => !!status),
@@ -109,35 +115,55 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     }
 
     initializeCountryCeilings(): void {
-    this.countryCeilings = this.getCountryCeiling(this.entity);
-}
-
-// Add these helper methods to your component class
-private getRating(ratings: any[], currency: string): string {
-    const rating = ratings.find((r: any) => r.currency === currency);
-    return rating ? rating.value : '';
-}
-
-private getCountryCeilingTableData(sovereign: any, domicile: any) {
-    this.countryCode = domicile?.code;
-    return [
-        {
-            data: {
-                localSovereignRating: this.getRating(sovereign?.ratings || [], 'DOMESTIC'),
-                foreignSovereignRating: this.getRating(sovereign?.ratings || [], 'FOREIGN'),
-                localCountryCeiling: this.getRating(domicile?.ceilings || [], 'DOMESTIC'),
-                foreignCountryCeiling: this.getRating(domicile?.ceilings || [], 'FOREIGN')
-            }
+        if (this.entity) {
+            this.countryCeilings = this.getCountryCeiling(this.entity);
+        } else {
+            console.error('Entity data is not available for country ceiling initialization');
         }
-    ];
-}
+    }
 
-private getCountryCeiling(entities: any[]) {
-    const org = entities.find((entity: any) => entity.type === 'ORGANIZATION');
-    const domicile = org?.domicile;
-    const sovereign = org?.sovereign;
-    return this.getCountryCeilingTableData(sovereign, domicile);
-}
+    // Helper methods for country ceiling functionality
+    private getRating(ratings: any[], currency: string): string {
+        const rating = ratings?.find((r: any) => r.currency === currency);
+        return rating ? rating.value : '';
+    }
+
+    private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
+        this.countryCode = domicile?.code;
+        return [
+            {
+                data: {
+                    localSovereignRating: this.getRating(sovereign?.ratings || [], 'DOMESTIC'),
+                    foreignSovereignRating: this.getRating(sovereign?.ratings || [], 'FOREIGN'),
+                    localCountryCeiling: this.getRating(domicile?.ceilings || [], 'DOMESTIC'),
+                    foreignCountryCeiling: this.getRating(domicile?.ceilings || [], 'FOREIGN')
+                }
+            }
+        ];
+    }
+
+    private getCountryCeiling(entities: any[]): BlueTableData {
+        if (!entities || !Array.isArray(entities)) {
+            console.error('Invalid entity data for country ceiling calculation');
+            return [];
+        }
+        
+        const org = entities.find((entity: any) => entity.type === 'ORGANIZATION');
+        if (!org) {
+            console.warn('Organization entity not found');
+            return [];
+        }
+        
+        const domicile = org.domicile;
+        const sovereign = org.sovereign;
+        
+        if (!domicile || !sovereign) {
+            console.warn('Domicile or sovereign data not found in organization entity');
+            return [];
+        }
+        
+        return this.getCountryCeilingTableData(sovereign, domicile);
+    }
 
     public updateCreditModelQuestionDisplay() {
         this.isLGDModelUsedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-1');
@@ -280,4 +306,3 @@ private getCountryCeiling(entities: any[]) {
         else return false;
     }
 }
-
