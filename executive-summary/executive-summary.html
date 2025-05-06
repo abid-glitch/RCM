@@ -1,0 +1,34 @@
+        <div class="country-ceiling" *ngIf="isCountryCeilingsEnabled">
+            <div class="country-ceiling-title">{{ 'executiveSummary.countryCeilings.title' | translate }}</div>
+            <div class="country-ceiling-item">
+                <div class="country-ceiling-item-country">{{ countryCode | translate }}</div>
+                <div class="country-ceiling-item-table">
+                    <blue-table [data]="countryCeilings">
+                        <ng-template blueTemplate="header">
+                            <tr blueTableHeaderRow sticky>
+                                <td blueTableHeaderCell>
+                                    {{ 'executiveSummary.countryCeilings.localCurrencySovereignRating' | translate }}
+                                </td>
+                                <td blueTableHeaderCell>
+                                    {{ 'executiveSummary.countryCeilings.foreignCurrencySovereignRating' | translate }}
+                                </td>
+                                <td blueTableHeaderCell>
+                                    {{ 'executiveSummary.countryCeilings.localCurrencyCountryCeiling' | translate }}
+                                </td>
+                                <td blueTableHeaderCell>
+                                    {{ 'executiveSummary.countryCeilings.foreignCurrencyCountryCeiling' | translate }}
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template blueTemplate="body" let-row="row">
+                            <tr blueTableRow [blueTableRow]="row">
+                                <td blueTableCell>{{ row.data.localSovereignRating }}</td>
+                                <td blueTableCell>{{ row.data.foreignSovereignRating }}</td>
+                                <td blueTableCell>{{ row.data.localCountryCeiling }}</td>
+                                <td blueTableCell>{{ row.data.foreignCountryCeiling }}</td>
+                            </tr>
+                        </ng-template>
+                    </blue-table>
+                </div>
+            </div>
+        </div>
