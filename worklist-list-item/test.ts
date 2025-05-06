@@ -416,42 +416,65 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
  private navigateToRatingRecommendationPage() {
-        this.contentLoaderService.show();
-        console.log('[Navigation] Starting navigation with case ID:', this.case?.id);
-        
-        try {
-            // Check if case exists
-            if (!this.case || !this.case.id) {
-                console.error('[Navigation] Case or case ID is undefined');
-                this.contentLoaderService.hide();
-                return;
-            }
-            
-            console.log('[Navigation] Storing case ID:', this.case.id);
-            const url = this.ratingRecommendationService.isCaseSaved(this.case.id);
-            
-            console.log('[Navigation] Setting localStorage for case:', this.case.id);
-            localStorage.setItem(`case-${this.case.id}-saved`, 'true');
-            
-            const targetUrl = `${AppRoutes.RATING_RECOMMENDATION}/${url}`;
-            console.log('[Navigation] Navigating to:', targetUrl);
-            
-            this.casesService.router
-                .navigateByUrl(targetUrl)
-                .then(() => {
-                    console.log('[Navigation] Navigation completed successfully');
-                    this.contentLoaderService.hide();
-                })
-                .catch(error => {
-                    console.error('[Navigation] Navigation error:', error);
-                    this.contentLoaderService.hide();
+    this.contentLoaderService.show();
+    
+    this.casesService.getCaseById(this.case.id)
+        .pipe(
+            tap(committeeSupport => {
+                console.log('Case data loaded:', committeeSupport);
+                
+                // Store the committee support data in the data service
+                this.dataService.committeSupportWrapper = committeeSupport;
+                
+                // Create entity dictionary for rating details
+                this.createCurrentEntityDictionary();
+                
+                // Set table mode
+                this.ratingRecommendationService.setRatingsTableMode({
+                    tableMode: RatingsTableMode.EditRecommendation,
+                    ratingsDetails: this.selectedCaseEntityDictionary
                 });
-        } catch (error) {
-            console.error('[Navigation] Error in navigation method:', error);
-            this.contentLoaderService.hide();
-        }
-    }
-
+                
+                // Make sure entities are properly loaded
+                // This is critical for displaying table data
+                if (committeeSupport.entities?.length) {
+                    console.log('Setting entities in subject:', committeeSupport.entities);
+                    
+                    // Ensure entities have all required properties
+                    const processedEntities = committeeSupport.entities.map(entity => {
+                        // Make sure each entity has all required properties
+                        return {
+                            ...entity,
+                            // Add any missing properties needed for display
+                            hasRatingRecommendation: true
+                        };
+                    });
+                    
+                    // Explicitly set hasRatingRecommendation flag which might be causing the issue
+                    committeeSupport.hasRatingRecommendation = true;
+                    
+                    // Update entities in the service
+                    this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
+                } else {
+                    console.warn('No entities found in case data');
+                }
+            }),
+            finalize(() => {
+                this.contentLoaderService.hide();
+                // Navigate after ensuring data is ready
+                setTimeout(() => {
+                    this.casesService.router.navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`);
+                }, 100); // Small delay to ensure data is processed
+            })
+        )
+        .subscribe(
+            () => console.log('Navigation preparation complete'),
+            error => {
+                console.error('Error preparing for navigation:', error);
+                this.contentLoaderService.hide();
+            }
+        );
+}
 }
 
 
