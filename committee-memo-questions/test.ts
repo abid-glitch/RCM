@@ -108,20 +108,41 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     // Initialize country ceiling data
     initializeCountryCeilings(): void {
-        // Get entity data from entityService
-        const entityData = this.entityService.getEntity();
-        if (entityData) {
-            this.countryCeilings = this.getCountryCeiling(entityData);
+        // Get selected entities from the dataService or use the organizations from entityService
+        const selectedEntities = this.dataService.getSelectedEntities();
+        if (selectedEntities && selectedEntities.length > 0) {
+            this.countryCeilings = this.getCountryCeiling(selectedEntities);
+        } else {
+            // Get organization family data if available from the organization family subject
+            this.entityService.organizationFamily$.pipe(
+                filter(family => !!family),
+                takeUntil(this.destroy$)
+            ).subscribe(family => {
+                if (family) {
+                    this.countryCeilings = this.getCountryCeiling([family]);
+                }
+            });
         }
     }
 
-    // Get country ceiling data - similar to ExecutiveSummaryComponent implementation
-    private getCountryCeiling(entity: any): BlueTableData {
-        if (!entity) return [];
+    // Get country ceiling data
+    private getCountryCeiling(entities: any[]): BlueTableData {
+        if (!entities || entities.length === 0) return [];
         
-        const org = entity.organizations?.[0] || entity;
-        const domicile = org?.domicile;
-        const sovereign = org?.sovereign;
+        // Find organization in entities
+        const org = entities.find((entity: any) => 
+            entity.type === 'ORGANIZATION' || 
+            (entity.organizations && entity.organizations.length > 0)
+        );
+        
+        if (!org) return [];
+        
+        // Check if it's directly an organization or has organizations array
+        const organization = org.type === 'ORGANIZATION' ? org : org.organizations?.[0];
+        if (!organization) return [];
+        
+        const domicile = organization.domicile;
+        const sovereign = organization.sovereign;
         
         return this.getCountryCeilingTableData(sovereign, domicile);
     }
