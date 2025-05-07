@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommitteeMemo } from 'src/app/shared/models/CommittteeMemo';
 import { EntityService } from 'src/app/shared/services/entity.service';
 import { DataService } from 'src/app/shared/services/data.service';
@@ -7,8 +7,8 @@ import { CommitteeSupport } from 'src/app/shared/models/CommitteeSupport';
 import { PrimaryMethodologyService } from '../primary-methodology-enhanced/services/primary-methodology.service';
 import { count, debounceTime, filter, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { RatingGroupType } from '@app/shared/models/RatingGroupType';
-import { Methodology } from '@shared/models/Methodology';
-import { auditTime, Observable, Subject } from 'rxjs';
+import { Methodology } from '../../shared/models/Methodology';
+import { Observable, Subject } from 'rxjs';
 import { BlueFieldLabelPosition, BlueTableData } from '@moodys/blue-ng';
 
 @Component({
@@ -19,7 +19,8 @@ import { BlueFieldLabelPosition, BlueTableData } from '@moodys/blue-ng';
 
 // CODE_DEBT: have setter/getter in data.service to interact with Main Model
 export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
-    private readonly destroy$ = new Subject<void>();
+    // @Input() selectedMethodologyList?: Methodology[];
+    private destroy$ = new Subject<void>();
 
     committeeInfo: CommitteeMemo;
     committeeSupportWrapper: CommitteeSupport;
@@ -29,10 +30,11 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     public isInsuranceScoreUseEnabled: boolean;
     public isInsScrdOverIndMethodologyEnabled: boolean;
 
-    countryCode: string;
-    entity: any; // Define the entity property
+    // Country ceiling related properties
+    countryCode: string = '';
     countryCeilings: BlueTableData = [];
     isCountryCeilingsEnabled = true;
+
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
     selectedRatingGroup: RatingGroupType = this.dataService.getSelectedRatingGroup();
@@ -49,6 +51,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
             this.updateCreditModelQuestionDisplay();
         })
     );
+    readonly selectedMethodologies$ = this.primaryMethodologyService.selectedMethodology$;
     readonly selectedMethodologyValues$: Observable<Methodology[]> =
         this.primaryMethodologyService.selectedMethodology$.pipe(
             filter((methodology) => !!methodology),
@@ -62,26 +65,19 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     constructor(
         public entityService: EntityService,
         public dataService: DataService,
-        private readonly _changeDetectorRef: ChangeDetectorRef,
-        private readonly primaryMethodologyService: PrimaryMethodologyService
+        private primaryMethodologyService: PrimaryMethodologyService
     ) {}
 
     ngOnInit(): void {
         this.committeeSupportWrapper = this.dataService.committeSupportWrapper;
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
-
-        // Get the entity data from the entityService or dataService
-        this.entity = this.entityService.getEntities(); // Ensure this method exists or use appropriate method
-        
-        // Initialize country ceiling data
-        this.initializeCountryCeilings();
+        this.initializeCountryCeilings(); // Add initialization for country ceilings
 
         this.updateCRQT$
             .pipe(
                 filter((status) => !!status),
                 switchMap(() => this.selectedMethodologyValues$),
-                auditTime(500),
                 tap((methodologyList) => {
                     this.committeeInfo.crqt = this.committeeInfo.crqt.filter(
                         (crqt) =>
@@ -97,7 +93,6 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
                             });
                         }
                     }
-                    this._changeDetectorRef.detectChanges();
                 }),
                 takeUntil(this.destroy$)
             )
@@ -114,22 +109,63 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.destroy$.complete();
     }
 
+    // Initialize country ceiling data from entity information
     initializeCountryCeilings(): void {
-        if (this.entity) {
-            this.countryCeilings = this.getCountryCeiling(this.entity);
+        // Check if entity information is available through the entity service
+        const entityData = this.entityService.getEntityData();
+        
+        if (entityData) {
+            // Extract organization data
+            const org = this.findOrganization(entityData);
+            
+            if (org) {
+                const domicile = org.domicile;
+                const sovereign = org.sovereign;
+                
+                if (domicile && sovereign) {
+                    // Set country code from domicile
+                    this.countryCode = domicile.code || 'Unknown';
+                    
+                    // Populate table data
+                    this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
+                } else {
+                    console.warn('Missing domicile or sovereign data');
+                    this.isCountryCeilingsEnabled = false;
+                }
+            } else {
+                console.warn('No organization found in entity data');
+                this.isCountryCeilingsEnabled = false;
+            }
         } else {
-            console.error('Entity data is not available for country ceiling initialization');
+            console.warn('No entity data available');
+            this.isCountryCeilingsEnabled = false;
         }
     }
 
-    // Helper methods for country ceiling functionality
+    // Helper method to find organization in entity data
+    private findOrganization(entityData: any[]): any {
+        if (Array.isArray(entityData)) {
+            return entityData.find((entity: any) => entity.type === 'ORGANIZATION');
+        }
+        return null;
+    }
+
+    // Method to get ratings from ratings array
     private getRating(ratings: any[], currency: string): string {
-        const rating = ratings?.find((r: any) => r.currency === currency);
+        if (!ratings || !Array.isArray(ratings)) {
+            return '';
+        }
+        
+        const rating = ratings.find((r: any) => r.currency === currency);
         return rating ? rating.value : '';
     }
 
+    // Method to generate table data for country ceilings
     private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
-        this.countryCode = domicile?.code;
+        if (!sovereign || !domicile) {
+            return [];
+        }
+        
         return [
             {
                 data: {
@@ -142,35 +178,9 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         ];
     }
 
-    private getCountryCeiling(entities: any[]): BlueTableData {
-        if (!entities || !Array.isArray(entities)) {
-            console.error('Invalid entity data for country ceiling calculation');
-            return [];
-        }
-        
-        const org = entities.find((entity: any) => entity.type === 'ORGANIZATION');
-        if (!org) {
-            console.warn('Organization entity not found');
-            return [];
-        }
-        
-        const domicile = org.domicile;
-        const sovereign = org.sovereign;
-        
-        if (!domicile || !sovereign) {
-            console.warn('Domicile or sovereign data not found in organization entity');
-            return [];
-        }
-        
-        return this.getCountryCeilingTableData(sovereign, domicile);
-    }
-
     public updateCreditModelQuestionDisplay() {
         this.isLGDModelUsedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-1');
-        const standardCrsCrmVisibility = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
-
-        this.isCrsCrmVerifiedEnabled =
-            standardCrsCrmVisibility || this.selectedRatingGroup === RatingGroupType.NonBanking;
+        this.isCrsCrmVerifiedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
         this.isInsuranceScoreUseEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-3');
         this.updateInsuranceScoreCardUsed();
         this.clearCrqtQuestionsWhenHidden();
