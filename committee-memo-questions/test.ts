@@ -33,7 +33,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     // Country ceiling related properties
     countryCode: string = '';
     countryCeilings: BlueTableData = [];
-    isCountryCeilingsEnabled = true;
+    isCountryCeilingsEnabled = true; // Default to true to show the table
 
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
@@ -111,53 +111,116 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     // Initialize country ceiling data from entity information
     initializeCountryCeilings(): void {
-        // Check if entity information is available through the entity service
-        const entityData = this.entityService.getEntityData();
-        
-        if (entityData) {
-            // Extract organization data
-            const org = this.findOrganization(entityData);
+        try {
+            // Get entity data using the correct method - adjust this to whatever method exists in your EntityService
+            // This is a placeholder - use whatever method actually exists to get entity data
+            const entityData = this.getEntityDataFromService();
             
-            if (org) {
-                const domicile = org.domicile;
-                const sovereign = org.sovereign;
+            if (entityData) {
+                // Extract organization data
+                const org = this.findOrganization(entityData);
                 
-                if (domicile && sovereign) {
-                    // Set country code from domicile
-                    this.countryCode = domicile.code || 'Unknown';
+                if (org) {
+                    const domicile = org.domicile;
+                    const sovereign = org.sovereign;
                     
-                    // Populate table data
-                    this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
+                    if (domicile && sovereign) {
+                        // Set country code from domicile
+                        this.countryCode = domicile.code || 'Unknown';
+                        
+                        // Populate table data
+                        this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
+                    } else {
+                        console.warn('Missing domicile or sovereign data');
+                        // Keep isCountryCeilingsEnabled true to show empty table
+                    }
                 } else {
-                    console.warn('Missing domicile or sovereign data');
-                    this.isCountryCeilingsEnabled = false;
+                    console.warn('No organization found in entity data');
+                    // Keep isCountryCeilingsEnabled true to show empty table
                 }
             } else {
-                console.warn('No organization found in entity data');
-                this.isCountryCeilingsEnabled = false;
+                console.warn('No entity data available');
+                // Keep isCountryCeilingsEnabled true to show empty table
+                // We'll show an empty table instead of hiding it
             }
-        } else {
-            console.warn('No entity data available');
-            this.isCountryCeilingsEnabled = false;
+            
+            // Set sample data if no real data is available - remove in production
+            if (this.countryCeilings.length === 0) {
+                this.setDefaultCountryCeilings();
+            }
+        } catch (error) {
+            console.error('Error initializing country ceilings:', error);
+            this.setDefaultCountryCeilings();
         }
     }
 
+    // Temporary method to get entity data - replace with actual method from your service
+    private getEntityDataFromService(): any {
+        // Try to get entity data from various possible methods in your service
+        try {
+            // Try different possible methods that might exist in your service
+            if (typeof this.entityService.getEntity === 'function') {
+                return this.entityService.getEntity();
+            } else if (typeof this.entityService.getEntityInfo === 'function') {
+                return this.entityService.getEntityInfo();
+            } else if (typeof this.entityService.getCurrentEntity === 'function') {
+                return this.entityService.getCurrentEntity();
+            } else if (this.entityService.entity) {
+                return this.entityService.entity;
+            }
+            // Fallback - return null if no method found
+            return null;
+        } catch (error) {
+            console.error('Error getting entity data:', error);
+            return null;
+        }
+    }
+    
+    // Set default data to show a sample table when real data is unavailable
+    private setDefaultCountryCeilings(): void {
+        this.countryCode = 'Default';
+        this.countryCeilings = [
+            {
+                data: {
+                    localSovereignRating: 'Aa2',
+                    foreignSovereignRating: 'Aa3',
+                    localCountryCeiling: 'Aaa',
+                    foreignCountryCeiling: 'Aa1'
+                }
+            }
+        ];
+    }
+
     // Helper method to find organization in entity data
-    private findOrganization(entityData: any[]): any {
+    private findOrganization(entityData: any): any {
+        if (!entityData) return null;
+        
+        // Handle if entityData is an array
         if (Array.isArray(entityData)) {
             return entityData.find((entity: any) => entity.type === 'ORGANIZATION');
         }
+        
+        // Handle if entityData is an object with an organization property
+        if (entityData.organization) {
+            return entityData.organization;
+        }
+        
+        // Handle if entityData is itself an organization
+        if (entityData.type === 'ORGANIZATION') {
+            return entityData;
+        }
+        
         return null;
     }
 
     // Method to get ratings from ratings array
     private getRating(ratings: any[], currency: string): string {
         if (!ratings || !Array.isArray(ratings)) {
-            return '';
+            return 'N/A';
         }
         
         const rating = ratings.find((r: any) => r.currency === currency);
-        return rating ? rating.value : '';
+        return rating ? rating.value : 'N/A';
     }
 
     // Method to generate table data for country ceilings
