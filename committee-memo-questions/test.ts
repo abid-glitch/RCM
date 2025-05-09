@@ -10,6 +10,8 @@ import { RatingGroupType } from '@app/shared/models/RatingGroupType';
 import { Methodology } from '../../shared/models/Methodology';
 import { Observable, Subject } from 'rxjs';
 import { BlueFieldLabelPosition, BlueTableData } from '@moodys/blue-ng';
+import { CommitteePackageApiService } from 'src/app/shared/services/committee-package-api.service';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
     selector: 'app-committee-memo-questions',
@@ -34,6 +36,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     countryCode: string = '';
     countryCeilings: BlueTableData = [];
     isCountryCeilingsEnabled = true;
+    caseId: string;
 
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
@@ -65,7 +68,9 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     constructor(
         public entityService: EntityService,
         public dataService: DataService,
-        private primaryMethodologyService: PrimaryMethodologyService
+        private primaryMethodologyService: PrimaryMethodologyService,
+        private committeePackageApiService: CommitteePackageApiService,
+        private route: ActivatedRoute
     ) {}
 
     ngOnInit(): void {
@@ -73,7 +78,24 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
         
-        // Initialize country ceiling data
+        // Get caseId from route params
+        this.route.params.subscribe(params => {
+            if (params['caseId']) {
+                this.caseId = params['caseId'];
+                // Load country ceiling data using the committee package API service
+                this.loadCountryCeilingData();
+            }
+        });
+
+        // As a fallback, try to extract from URL if not available in route params
+        if (!this.caseId) {
+            this.caseId = this.extractCaseIdFromUrl();
+            if (this.caseId) {
+                this.loadCountryCeilingData();
+            }
+        }
+        
+        // Original initialization of country ceilings
         this.initializeCountryCeilings();
 
         this.updateCRQT$
@@ -104,6 +126,40 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
             this.committeeInfo.crqt = [];
         }
         this.setCrqt();
+    }
+
+    // Load country ceiling data using CommitteePackageApiService
+    loadCountryCeilingData(): void {
+        if (!this.caseId) return;
+        
+        this.committeePackageApiService.getCommitteePackage(this.caseId)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(response => {
+                if (response && response.entity) {
+                    const entityData = response.entity;
+                    
+                    // Process organization data
+                    if (entityData.organization) {
+                        const domicile = entityData.organization.domicile;
+                        const sovereign = entityData.organization.sovereign;
+                        
+                        if (domicile && sovereign) {
+                            this.countryCode = domicile.code || '';
+                            this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
+                        }
+                    }
+                }
+            });
+    }
+
+    // Extract case ID from URL if not available in route params
+    private extractCaseIdFromUrl(): string {
+        const pathParts = window.location.pathname.split('/');
+        const caseIdIndex = pathParts.findIndex(part => part === 'cases');
+        if (caseIdIndex >= 0 && caseIdIndex < pathParts.length - 1) {
+            return pathParts[caseIdIndex + 1];
+        }
+        return null;
     }
 
     // Initialize country ceiling data
@@ -144,6 +200,10 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         const domicile = organization.domicile;
         const sovereign = organization.sovereign;
         
+        if (domicile) {
+            this.countryCode = domicile.code || '';
+        }
+        
         return this.getCountryCeilingTableData(sovereign, domicile);
     }
 
@@ -151,7 +211,6 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
         if (!sovereign || !domicile) return [];
         
-        this.countryCode = domicile.code;
         return [
             {
                 data: {
