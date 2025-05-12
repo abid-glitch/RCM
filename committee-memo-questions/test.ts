@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { CommitteeMemo } from 'src/app/shared/models/CommittteeMemo';
 import { EntityService } from 'src/app/shared/services/entity.service';
 import { DataService } from 'src/app/shared/services/data.service';
@@ -7,10 +7,10 @@ import { CommitteeSupport } from 'src/app/shared/models/CommitteeSupport';
 import { PrimaryMethodologyService } from '../primary-methodology-enhanced/services/primary-methodology.service';
 import { count, debounceTime, filter, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { RatingGroupType } from '@app/shared/models/RatingGroupType';
-import { Methodology } from '../../shared/models/Methodology';
-import { Observable, Subject } from 'rxjs';
+import { Methodology } from '@shared/models/Methodology';
+import { auditTime, Observable, Subject } from 'rxjs';
 import { BlueFieldLabelPosition, BlueTableData } from '@moodys/blue-ng';
-import { CommitteePackageApiService } from 'src/app/shared/services/committee-package-api.service';
+import { CommitteePackageApiService } from '@app/close/repository/committee-package-api.service';
 import { ActivatedRoute } from '@angular/router';
 
 @Component({
@@ -21,8 +21,7 @@ import { ActivatedRoute } from '@angular/router';
 
 // CODE_DEBT: have setter/getter in data.service to interact with Main Model
 export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
-    // @Input() selectedMethodologyList?: Methodology[];
-    private destroy$ = new Subject<void>();
+    private readonly destroy$ = new Subject<void>();
 
     committeeInfo: CommitteeMemo;
     committeeSupportWrapper: CommitteeSupport;
@@ -37,6 +36,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     countryCeilings: BlueTableData = [];
     isCountryCeilingsEnabled = true;
     caseId: string;
+    numbercommittee : number;
 
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
@@ -54,7 +54,6 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
             this.updateCreditModelQuestionDisplay();
         })
     );
-    readonly selectedMethodologies$ = this.primaryMethodologyService.selectedMethodology$;
     readonly selectedMethodologyValues$: Observable<Methodology[]> =
         this.primaryMethodologyService.selectedMethodology$.pipe(
             filter((methodology) => !!methodology),
@@ -68,16 +67,18 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     constructor(
         public entityService: EntityService,
         public dataService: DataService,
-        private primaryMethodologyService: PrimaryMethodologyService,
-        private committeePackageApiService: CommitteePackageApiService,
-        private route: ActivatedRoute
+        private readonly _changeDetectorRef: ChangeDetectorRef,
+        private readonly primaryMethodologyService: PrimaryMethodologyService,
+        private route: ActivatedRoute,
+        private committeePackageApiService : CommitteePackageApiService
+
     ) {}
 
     ngOnInit(): void {
         this.committeeSupportWrapper = this.dataService.committeSupportWrapper;
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
-        
+
         // Get caseId from route params
         this.route.params.subscribe(params => {
             if (params['caseId']) {
@@ -88,12 +89,12 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         });
 
         // As a fallback, try to extract from URL if not available in route params
-        if (!this.caseId) {
-            this.caseId = this.extractCaseIdFromUrl();
-            if (this.caseId) {
-                this.loadCountryCeilingData();
-            }
-        }
+        // if (!this.caseId) {
+        //     this.caseId = this.extractCaseIdFromUrl();
+        //     if (this.caseId) {
+        //         this.loadCountryCeilingData();
+        //     }
+        // }
         
         // Original initialization of country ceilings
         this.initializeCountryCeilings();
@@ -102,6 +103,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
             .pipe(
                 filter((status) => !!status),
                 switchMap(() => this.selectedMethodologyValues$),
+                auditTime(500),
                 tap((methodologyList) => {
                     this.committeeInfo.crqt = this.committeeInfo.crqt.filter(
                         (crqt) =>
@@ -117,6 +119,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
                             });
                         }
                     }
+                    this._changeDetectorRef.detectChanges();
                 }),
                 takeUntil(this.destroy$)
             )
@@ -127,12 +130,11 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         }
         this.setCrqt();
     }
-
     // Load country ceiling data using CommitteePackageApiService
     loadCountryCeilingData(): void {
         if (!this.caseId) return;
         
-        this.committeePackageApiService.getCommitteePackage(this.caseId)
+        this.committeePackageApiService.getCommitteePackage(this.caseId, this.numbercommittee)
             .pipe(takeUntil(this.destroy$))
             .subscribe(response => {
                 if (response && response.entity) {
@@ -236,7 +238,10 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     public updateCreditModelQuestionDisplay() {
         this.isLGDModelUsedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-1');
-        this.isCrsCrmVerifiedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
+        const standardCrsCrmVisibility = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
+
+        this.isCrsCrmVerifiedEnabled =
+            standardCrsCrmVisibility || this.selectedRatingGroup === RatingGroupType.NonBanking;
         this.isInsuranceScoreUseEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-3');
         this.updateInsuranceScoreCardUsed();
         this.clearCrqtQuestionsWhenHidden();
@@ -319,7 +324,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     private verifyCreditModelSelected() {
         const selectedLgdModelUsed = this.committeeInfo.lgdModelUsed;
-        const selectedCrsCrmVerified = this.committeeInfo.crsCrmVerified;
+        const selectedCrsCrmVerified = this.committeeInfo.crsCrmVerified; // ****
         const selectedInsuranceScoreUsed = this.committeeInfo.insuranceScoreUsed;
         const selectedInsScrdOverIndMethodology = this.committeeInfo.insuranceScoreUsedOverIndMethodology;
 
