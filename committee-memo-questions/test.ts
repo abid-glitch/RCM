@@ -37,7 +37,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     countryCeilings: BlueTableData = [];
     isCountryCeilingsEnabled = true;
     caseId: string;
-    numbercommittee : number;
+    numbercommittee: number;
 
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
@@ -72,7 +72,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         private primaryMethodologyService: PrimaryMethodologyService,
         private route: ActivatedRoute,
         private readonly _changeDetectorRef: ChangeDetectorRef,
-        private committeePackageApiService : CommitteePackageApiService
+        private committeePackageApiService: CommitteePackageApiService
     ) {}
 
     ngOnInit(): void {
@@ -80,25 +80,18 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
         
-        // Get caseId from route params
+        // Retrieve the caseId from route params or url
         this.route.params.subscribe(params => {
             if (params['caseId']) {
                 this.caseId = params['caseId'];
-                // Load country ceiling data using the committee package API service
                 this.loadCountryCeilingData();
+            } else {
+                this.caseId = this.extractCaseIdFromUrl();
+                if (this.caseId) {
+                    this.loadCountryCeilingData();
+                }
             }
         });
-
-        // As a fallback, try to extract from URL if not available in route params
-        if (!this.caseId) {
-            this.caseId = this.extractCaseIdFromUrl();
-            if (this.caseId) {
-                this.loadCountryCeilingData();
-            }
-        }
-        
-        // Original initialization of country ceilings
-        this.initializeCountryCeilings();
 
         this.updateCRQT$
             .pipe(
@@ -151,6 +144,18 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
                             this.countryCode = domicile.code || '';
                             this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
                         }
+                    } else if (entityData.organizations && entityData.organizations.length > 0) {
+                        // Process first organization if available in organizations array
+                        const organization = entityData.organizations[0];
+                        if (organization) {
+                            const domicile = organization.domicile;
+                            const sovereign = organization.sovereign;
+                            
+                            if (domicile && sovereign) {
+                                this.countryCode = domicile.code || '';
+                                this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
+                            }
+                        }
                     }
                 }
             });
@@ -163,52 +168,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         if (caseIdIndex >= 0 && caseIdIndex < pathParts.length - 1) {
             return pathParts[caseIdIndex + 1];
         }
-        return null;
-    }
-
-    // Initialize country ceiling data
-    initializeCountryCeilings(): void {
-        // Get selected entities from the dataService or use the organizations from entityService
-        const selectedEntities = this.dataService.getSelectedEntities();
-        if (selectedEntities && selectedEntities.length > 0) {
-            this.countryCeilings = this.getCountryCeiling(selectedEntities);
-        } else {
-            // Get organization family data if available from the organization family subject
-            this.entityService.organizationFamily$.pipe(
-                filter(family => !!family),
-                takeUntil(this.destroy$)
-            ).subscribe(family => {
-                if (family) {
-                    this.countryCeilings = this.getCountryCeiling([family]);
-                }
-            });
-        }
-    }
-
-    // Get country ceiling data
-    private getCountryCeiling(entities: any[]): BlueTableData {
-        if (!entities || entities.length === 0) return [];
-        
-        // Find organization in entities
-        const org = entities.find((entity: any) => 
-            entity.type === 'ORGANIZATION' || 
-            (entity.organizations && entity.organizations.length > 0)
-        );
-        
-        if (!org) return [];
-        
-        // Check if it's directly an organization or has organizations array
-        const organization = org.type === 'ORGANIZATION' ? org : org.organizations?.[0];
-        if (!organization) return [];
-        
-        const domicile = organization.domicile;
-        const sovereign = organization.sovereign;
-        
-        if (domicile) {
-            this.countryCode = domicile.code || '';
-        }
-        
-        return this.getCountryCeilingTableData(sovereign, domicile);
+        return '';
     }
 
     // Format country ceiling table data
