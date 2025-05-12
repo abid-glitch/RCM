@@ -8,7 +8,7 @@ import { PrimaryMethodologyService } from '../primary-methodology-enhanced/servi
 import { count, debounceTime, filter, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { RatingGroupType } from '@app/shared/models/RatingGroupType';
 import { Methodology } from '../../shared/models/Methodology';
-import { auditTime, Observable, Subject } from 'rxjs';
+import { auditTime, catchError, Observable, of, Subject } from 'rxjs';
 import { BlueFieldLabelPosition, BlueTableData } from '@moodys/blue-ng';
 import { CommitteePackageApiService } from '@app/close/repository/committee-package-api.service';
 import { ActivatedRoute } from '@angular/router';
@@ -73,25 +73,52 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         private route: ActivatedRoute,
         private readonly _changeDetectorRef: ChangeDetectorRef,
         private committeePackageApiService: CommitteePackageApiService
-    ) {}
+    ) {
+        // Initialize properties to avoid undefined errors
+        this.committeeInfo = {} as CommitteeMemo;
+        this.committeeSupportWrapper = {} as CommitteeSupport;
+        
+        // Initialize empty table data
+        this.countryCeilings = [];
+    }
 
     ngOnInit(): void {
         this.committeeSupportWrapper = this.dataService.committeSupportWrapper;
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
         
-        // Retrieve the caseId from route params or url
-        this.route.params.subscribe(params => {
-            if (params['caseId']) {
-                this.caseId = params['caseId'];
-                this.loadCountryCeilingData();
-            } else {
-                this.caseId = this.extractCaseIdFromUrl();
-                if (this.caseId) {
-                    this.loadCountryCeilingData();
+        // Set up subscription for route params
+        this.route.params
+            .pipe(
+                takeUntil(this.destroy$),
+                tap(params => {
+                    console.log('Route params:', params);
+                    if (params['caseId']) {
+                        this.caseId = params['caseId'];
+                    }
+                })
+            )
+            .subscribe({
+                next: () => {
+                    // If caseId not in route params, try to extract from URL
+                    if (!this.caseId) {
+                        this.caseId = this.extractCaseIdFromUrl();
+                        console.log('Extracted caseId from URL:', this.caseId);
+                    }
+                    
+                    // If we have a caseId, load the data
+                    if (this.caseId) {
+                        console.log('Loading country ceiling data for caseId:', this.caseId);
+                        this.loadCountryCeilingData();
+                    } else {
+                        console.warn('No caseId available, cannot load country ceiling data');
+                    }
                 }
-            }
-        });
+            });
+
+        // Get committee number from data service if available
+        this.numbercommittee = this.dataService.getCommitteeNumber() || 0;
+        console.log('Committee number:', this.numbercommittee);
 
         this.updateCRQT$
             .pipe(
@@ -127,36 +154,68 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     // Load country ceiling data using CommitteePackageApiService
     loadCountryCeilingData(): void {
-        if (!this.caseId) return;
+        if (!this.caseId) {
+            console.warn('Cannot load country ceiling data: caseId is missing');
+            return;
+        }
         
-        this.committeePackageApiService.getCommitteePackage(this.caseId, this.numbercommittee)
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(response => {
-                if (response && response.entity) {
-                    const entityData = response.entity;
-                    
-                    // Process organization data
-                    if (entityData.organization) {
-                        const domicile = entityData.organization.domicile;
-                        const sovereign = entityData.organization.sovereign;
-                        
-                        if (domicile && sovereign) {
-                            this.countryCode = domicile.code || '';
-                            this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
-                        }
-                    } else if (entityData.organizations && entityData.organizations.length > 0) {
-                        // Process first organization if available in organizations array
-                        const organization = entityData.organizations[0];
-                        if (organization) {
-                            const domicile = organization.domicile;
-                            const sovereign = organization.sovereign;
-                            
-                            if (domicile && sovereign) {
-                                this.countryCode = domicile.code || '';
-                                this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
-                            }
-                        }
+        console.log('Fetching committee package for caseId:', this.caseId);
+        
+        // Use appropriate value for numbercommittee or default to 0 if undefined
+        const committeeNumber = this.numbercommittee || 0;
+        
+        this.committeePackageApiService.getCommitteePackage(this.caseId, committeeNumber)
+            .pipe(
+                tap(response => console.log('API Response:', response)),
+                takeUntil(this.destroy$)
+            )
+            .subscribe({
+                next: (response) => {
+                    if (!response) {
+                        console.warn('Empty response from API');
+                        return;
                     }
+                    
+                    // Try different paths to find the organization data
+                    let organization;
+                    
+                    if (response.entity?.organization) {
+                        organization = response.entity.organization;
+                    } else if (response.entity?.organizations?.length > 0) {
+                        organization = response.entity.organizations[0];
+                    } else if (response.organization) {
+                        organization = response.organization;
+                    } else if (response.organizations?.length > 0) {
+                        organization = response.organizations[0];
+                    }
+                    
+                    if (!organization) {
+                        console.warn('No organization data found in API response');
+                        return;
+                    }
+                    
+                    console.log('Found organization:', organization);
+                    
+                    // Extract domicile and sovereign data
+                    const domicile = organization.domicile;
+                    const sovereign = organization.sovereign;
+                    
+                    if (domicile && sovereign) {
+                        console.log('Found domicile and sovereign data');
+                        this.countryCode = domicile.code || '';
+                        this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
+                        
+                        console.log('Country code set to:', this.countryCode);
+                        console.log('Country ceilings set to:', this.countryCeilings);
+                        
+                        // Force change detection to update the view
+                        this._changeDetectorRef.detectChanges();
+                    } else {
+                        console.warn('Missing domicile or sovereign data');
+                    }
+                },
+                error: (error) => {
+                    console.error('Error fetching committee package:', error);
                 }
             });
     }
@@ -164,31 +223,69 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     // Extract case ID from URL if not available in route params
     private extractCaseIdFromUrl(): string {
         const pathParts = window.location.pathname.split('/');
-        const caseIdIndex = pathParts.findIndex(part => part === 'cases');
-        if (caseIdIndex >= 0 && caseIdIndex < pathParts.length - 1) {
-            return pathParts[caseIdIndex + 1];
+        console.log('Path parts:', pathParts);
+        
+        // Look for 'cases' or 'case' in the URL
+        let caseIdIndex = pathParts.findIndex(part => part === 'cases');
+        if (caseIdIndex < 0) {
+            caseIdIndex = pathParts.findIndex(part => part === 'case');
         }
+        
+        if (caseIdIndex >= 0 && caseIdIndex < pathParts.length - 1) {
+            const caseId = pathParts[caseIdIndex + 1];
+            console.log('Found caseId in URL:', caseId);
+            return caseId;
+        }
+        
+        // Alternative approach: try to find a string that matches UUID pattern
+        for (const part of pathParts) {
+            // Simple UUID pattern check (not comprehensive)
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(part)) {
+                console.log('Found UUID pattern in URL:', part);
+                return part;
+            }
+        }
+        
+        console.warn('Could not extract caseId from URL');
         return '';
     }
 
     // Format country ceiling table data
     private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
-        if (!sovereign || !domicile) return [];
+        if (!sovereign || !domicile) {
+            console.warn('Missing sovereign or domicile data when formatting table data');
+            return [];
+        }
         
-        return [
+        // Ensure we have ratings and ceilings arrays
+        const sovereignRatings = sovereign.ratings || [];
+        const domicileCeilings = domicile.ceilings || [];
+        
+        console.log('Sovereign ratings:', sovereignRatings);
+        console.log('Domicile ceilings:', domicileCeilings);
+        
+        const tableData = [
             {
                 data: {
-                    localSovereignRating: this.getRating(sovereign?.ratings || [], 'DOMESTIC'),
-                    foreignSovereignRating: this.getRating(sovereign?.ratings || [], 'FOREIGN'),
-                    localCountryCeiling: this.getRating(domicile?.ceilings || [], 'DOMESTIC'),
-                    foreignCountryCeiling: this.getRating(domicile?.ceilings || [], 'FOREIGN')
+                    localSovereignRating: this.getRating(sovereignRatings, 'DOMESTIC'),
+                    foreignSovereignRating: this.getRating(sovereignRatings, 'FOREIGN'),
+                    localCountryCeiling: this.getRating(domicileCeilings, 'DOMESTIC'),
+                    foreignCountryCeiling: this.getRating(domicileCeilings, 'FOREIGN')
                 }
             }
         ];
+        
+        console.log('Generated table data:', tableData);
+        return tableData;
     }
 
     // Get rating by currency type
     private getRating(ratings: any[], currency: string): string {
+        if (!Array.isArray(ratings)) {
+            console.warn(`Ratings is not an array for currency ${currency}`);
+            return '';
+        }
+        
         const rating = ratings.find((r: any) => r.currency === currency);
         return rating ? rating.value : '';
     }
