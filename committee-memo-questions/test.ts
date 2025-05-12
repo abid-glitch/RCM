@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommitteeMemo } from 'src/app/shared/models/CommittteeMemo';
 import { EntityService } from 'src/app/shared/services/entity.service';
 import { DataService } from 'src/app/shared/services/data.service';
@@ -8,9 +8,9 @@ import { PrimaryMethodologyService } from '../primary-methodology-enhanced/servi
 import { count, debounceTime, filter, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { RatingGroupType } from '@app/shared/models/RatingGroupType';
 import { Methodology } from '../../shared/models/Methodology';
-import { auditTime, Observable, Subject } from 'rxjs';
-import { BlueFieldLabelPosition, BlueTableData } from '@moodys/blue-ng';
-import { CommitteePackageApiService } from '@app/close/repository/committee-package-api.service';
+import { Observable, Subject } from 'rxjs';
+import { BlueFieldLabelPosition } from '@moodys/blue-ng';
+import { CommitteePackageApiService } from '../services/committee-package-api.service';
 import { ActivatedRoute } from '@angular/router';
 
 @Component({
@@ -24,6 +24,11 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     // @Input() selectedMethodologyList?: Methodology[];
     private destroy$ = new Subject<void>();
 
+    caseId: string;
+    committeeNumber: number;
+    countryRatingData: any;
+    isLoading = true;
+    
     committeeInfo: CommitteeMemo;
     committeeSupportWrapper: CommitteeSupport;
 
@@ -31,13 +36,6 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     public isCrsCrmVerifiedEnabled: boolean;
     public isInsuranceScoreUseEnabled: boolean;
     public isInsScrdOverIndMethodologyEnabled: boolean;
-
-    // Country Ceiling properties
-    countryCode: string = '';
-    countryCeilings: BlueTableData = [];
-    isCountryCeilingsEnabled = true;
-    caseId: string;
-    numbercommittee : number;
 
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
@@ -70,38 +68,30 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         public entityService: EntityService,
         public dataService: DataService,
         private primaryMethodologyService: PrimaryMethodologyService,
-        private route: ActivatedRoute,
-        private readonly _changeDetectorRef: ChangeDetectorRef,
-        private committeePackageApiService : CommitteePackageApiService
+        private committeePackageApiService: CommitteePackageApiService,
+        private activatedRoute: ActivatedRoute
     ) {}
 
     ngOnInit(): void {
         this.committeeSupportWrapper = this.dataService.committeSupportWrapper;
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
-        
-        // Get caseId from route params
-        this.route.params.subscribe(params => {
-            if (params['caseId']) {
-                this.caseId = params['caseId'];
-                // Load country ceiling data using the committee package API service
-                this.loadCountryCeilingData();
-            }
-        });
 
-        // As a fallback, try to extract from URL if not available in route params
-        if (!this.caseId) {
-            this.caseId = this.extractCaseIdFromUrl();
-            if (this.caseId) {
-                this.loadCountryCeilingData();
-            }
-        }
+        // Extract caseId and committeeNumber from route params
+        this.activatedRoute.params.pipe(
+            takeUntil(this.destroy$)
+        ).subscribe(params => {
+            this.caseId = params['caseId'] || this.dataService.getCaseId();
+            this.committeeNumber = params['committeeNumber'] || null;
+            
+            // Load country rating data
+            this.loadCountryRatingData();
+        });
 
         this.updateCRQT$
             .pipe(
                 filter((status) => !!status),
                 switchMap(() => this.selectedMethodologyValues$),
-                auditTime(500),
                 tap((methodologyList) => {
                     this.committeeInfo.crqt = this.committeeInfo.crqt.filter(
                         (crqt) =>
@@ -117,7 +107,6 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
                             });
                         }
                     }
-                    this._changeDetectorRef.detectChanges();
                 }),
                 takeUntil(this.destroy$)
             )
@@ -129,60 +118,27 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.setCrqt();
     }
 
-    // Load country ceiling data using CommitteePackageApiService
-    loadCountryCeilingData(): void {
-        if (!this.caseId) return;
-        
-        this.committeePackageApiService.getCommitteePackage(this.caseId, this.numbercommittee)
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(response => {
-                if (response && response.entity) {
-                    const entityData = response.entity;
-                    
-                    // Process organization data
-                    if (entityData.organization) {
-                        const domicile = entityData.organization.domicile;
-                        const sovereign = entityData.organization.sovereign;
-                        
-                        if (domicile && sovereign) {
-                            this.countryCode = domicile.code || '';
-                            this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
-                        }
+    loadCountryRatingData() {
+        this.isLoading = true;
+        this.committeePackageApiService.getCommitteePackage(this.caseId, this.committeeNumber)
+            .pipe(
+                takeUntil(this.destroy$)
+            )
+            .subscribe({
+                next: (response) => {
+                    // Extract country rating data from response
+                    if (response && response.ratingCommittee) {
+                        this.countryRatingData = response.ratingCommittee.countryRatingData || {};
+                        // Update the data service with this data if needed
+                        this.dataService.updateCountryRatingData(this.countryRatingData);
                     }
+                    this.isLoading = false;
+                },
+                error: (error) => {
+                    console.error('Error loading country rating data:', error);
+                    this.isLoading = false;
                 }
             });
-    }
-
-    // Extract case ID from URL if not available in route params
-    private extractCaseIdFromUrl(): string {
-        const pathParts = window.location.pathname.split('/');
-        const caseIdIndex = pathParts.findIndex(part => part === 'cases');
-        if (caseIdIndex >= 0 && caseIdIndex < pathParts.length - 1) {
-            return pathParts[caseIdIndex + 1];
-        }
-        return null;
-    }
-
-    // Format country ceiling table data
-    private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
-        if (!sovereign || !domicile) return [];
-        
-        return [
-            {
-                data: {
-                    localSovereignRating: this.getRating(sovereign?.ratings || [], 'DOMESTIC'),
-                    foreignSovereignRating: this.getRating(sovereign?.ratings || [], 'FOREIGN'),
-                    localCountryCeiling: this.getRating(domicile?.ceilings || [], 'DOMESTIC'),
-                    foreignCountryCeiling: this.getRating(domicile?.ceilings || [], 'FOREIGN')
-                }
-            }
-        ];
-    }
-
-    // Get rating by currency type
-    private getRating(ratings: any[], currency: string): string {
-        const rating = ratings.find((r: any) => r.currency === currency);
-        return rating ? rating.value : '';
     }
 
     ngOnDestroy(): void {
@@ -192,10 +148,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     public updateCreditModelQuestionDisplay() {
         this.isLGDModelUsedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-1');
-        const standardCrsCrmVisibility = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
-
-        this.isCrsCrmVerifiedEnabled =
-            standardCrsCrmVisibility || this.selectedRatingGroup === RatingGroupType.NonBanking;
+        this.isCrsCrmVerifiedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
         this.isInsuranceScoreUseEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-3');
         this.updateInsuranceScoreCardUsed();
         this.clearCrqtQuestionsWhenHidden();
@@ -278,7 +231,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
 
     private verifyCreditModelSelected() {
         const selectedLgdModelUsed = this.committeeInfo.lgdModelUsed;
-        const selectedCrsCrmVerified = this.committeeInfo.crsCrmVerified;
+        const selectedCrsCrmVerified = this.committeeInfo.crsCrmVerified; // ****
         const selectedInsuranceScoreUsed = this.committeeInfo.insuranceScoreUsed;
         const selectedInsScrdOverIndMethodology = this.committeeInfo.insuranceScoreUsedOverIndMethodology;
 
@@ -329,5 +282,28 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         if (isAIAttested === YesNoUnknown.No) return true;
         else if (isAIAttested && isAIAttestedConfirm === YesNoUnknown.Yes) return true;
         else return false;
+    }
+
+    // Helper method to check if country rating data is loaded
+    get isCountryRatingDataLoaded(): boolean {
+        return !!this.countryRatingData && !this.isLoading;
+    }
+
+    // Helper method to get specific country rating data values
+    getCountryRatingValue(ratingType: string): string {
+        if (!this.countryRatingData) return '';
+        
+        switch(ratingType) {
+            case 'localCurrencySovereign':
+                return this.countryRatingData.localCurrencySovereignRating || '';
+            case 'foreignCurrencySovereign':
+                return this.countryRatingData.foreignCurrencySovereignRating || '';
+            case 'localCurrencyCeiling':
+                return this.countryRatingData.localCurrencyCountryCeiling || '';
+            case 'foreignCurrencyCeiling':
+                return this.countryRatingData.foreignCurrencyCountryCeiling || '';
+            default:
+                return '';
+        }
     }
 }
