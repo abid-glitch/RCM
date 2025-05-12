@@ -13,21 +13,27 @@ import { BlueFieldLabelPosition } from '@moodys/blue-ng';
 import { CommitteePackageApiService } from '../services/committee-package-api.service';
 import { ActivatedRoute } from '@angular/router';
 
+interface CountryRatingData {
+    countryCode: string;
+    localCurrencySovereignRating: string;
+    foreignCurrencySovereignRating: string;
+    localCurrencyCountryCeiling: string;
+    foreignCurrencyCountryCeiling: string;
+}
+
 @Component({
     selector: 'app-committee-memo-questions',
     templateUrl: './committee-memo-questions.component.html',
     styleUrls: ['./committee-memo-questions.component.scss']
 })
 
-// CODE_DEBT: have setter/getter in data.service to interact with Main Model
 export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
-    // @Input() selectedMethodologyList?: Methodology[];
     private destroy$ = new Subject<void>();
 
+    countryRatingData: CountryRatingData;
     caseId: string;
-    committeeNumber: number;
-    countryRatingData: any;
-    isLoading = true;
+    committeeNumber: number | null = null;
+    isLoading = false;
     
     committeeInfo: CommitteeMemo;
     committeeSupportWrapper: CommitteeSupport;
@@ -69,7 +75,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         public dataService: DataService,
         private primaryMethodologyService: PrimaryMethodologyService,
         private committeePackageApiService: CommitteePackageApiService,
-        private activatedRoute: ActivatedRoute
+        private route: ActivatedRoute
     ) {}
 
     ngOnInit(): void {
@@ -77,15 +83,20 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
 
-        // Extract caseId and committeeNumber from route params
-        this.activatedRoute.params.pipe(
+        // Get the caseId from the route parameters
+        this.route.params.pipe(
             takeUntil(this.destroy$)
         ).subscribe(params => {
-            this.caseId = params['caseId'] || this.dataService.getCaseId();
-            this.committeeNumber = params['committeeNumber'] || null;
+            if (params['caseId']) {
+                this.caseId = params['caseId'];
+            }
             
-            // Load country rating data
-            this.loadCountryRatingData();
+            if (params['committeeNumber']) {
+                this.committeeNumber = parseInt(params['committeeNumber'], 10) || null;
+            }
+            
+            // Load the committee package data
+            this.loadCommitteePackageData();
         });
 
         this.updateCRQT$
@@ -118,24 +129,48 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.setCrqt();
     }
 
-    loadCountryRatingData() {
+    loadCommitteePackageData() {
         this.isLoading = true;
+        
+        // If caseId was not found in route params, try to get it from the URL
+        if (!this.caseId) {
+            const urlParts = window.location.pathname.split('/');
+            const caseIdIndex = urlParts.indexOf('cases') + 1;
+            if (caseIdIndex > 0 && caseIdIndex < urlParts.length) {
+                this.caseId = urlParts[caseIdIndex];
+            }
+        }
+        
+        if (!this.caseId) {
+            console.error('Case ID not found');
+            this.isLoading = false;
+            return;
+        }
+
         this.committeePackageApiService.getCommitteePackage(this.caseId, this.committeeNumber)
             .pipe(
                 takeUntil(this.destroy$)
             )
             .subscribe({
                 next: (response) => {
-                    // Extract country rating data from response
+                    console.log('Committee package response:', response);
+                    
                     if (response && response.ratingCommittee) {
-                        this.countryRatingData = response.ratingCommittee.countryRatingData || {};
-                        // Update the data service with this data if needed
-                        this.dataService.updateCountryRatingData(this.countryRatingData);
+                        // Extract country rating data from the response
+                        const rc = response.ratingCommittee;
+                        
+                        this.countryRatingData = {
+                            countryCode: rc.countryCode || '',
+                            localCurrencySovereignRating: rc.localCurrencySovereignRating || 'Aaa',
+                            foreignCurrencySovereignRating: rc.foreignCurrencySovereignRating || 'Aaa',
+                            localCurrencyCountryCeiling: rc.localCurrencyCountryCeiling || 'Aaa',
+                            foreignCurrencyCountryCeiling: rc.foreignCurrencyCountryCeiling || 'Aaa'
+                        };
                     }
                     this.isLoading = false;
                 },
                 error: (error) => {
-                    console.error('Error loading country rating data:', error);
+                    console.error('Error loading committee package data:', error);
                     this.isLoading = false;
                 }
             });
@@ -153,6 +188,33 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.updateInsuranceScoreCardUsed();
         this.clearCrqtQuestionsWhenHidden();
         this.isInsScrdOverIndMethodologyEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-4');
+    }
+    
+    // Helper method to check if data is loaded
+    get isCountryRatingDataLoaded(): boolean {
+        return !!this.countryRatingData && !this.isLoading;
+    }
+
+    // Helper method to get country code
+    get countryCode(): string {
+        return this.countryRatingData?.countryCode || '';
+    }
+
+    // Helper methods to get rating values directly from countryRatingData
+    get localCurrencySovereignRating(): string {
+        return this.countryRatingData?.localCurrencySovereignRating || '';
+    }
+
+    get foreignCurrencySovereignRating(): string {
+        return this.countryRatingData?.foreignCurrencySovereignRating || '';
+    }
+
+    get localCurrencyCountryCeiling(): string {
+        return this.countryRatingData?.localCurrencyCountryCeiling || '';
+    }
+
+    get foreignCurrencyCountryCeiling(): string {
+        return this.countryRatingData?.foreignCurrencyCountryCeiling || '';
     }
 
     setCrqt() {
