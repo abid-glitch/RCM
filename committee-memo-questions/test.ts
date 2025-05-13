@@ -78,6 +78,9 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
 
+        // Extract caseId from committeeSupportWrapper
+        this.caseId = this.committeeSupportWrapper.caseId;
+        this.numbercommittee = this.committeeSupportWrapper.ratingCommitteeInfo?.number;
      
         this.loadCountryCeilingData();
 
@@ -116,6 +119,10 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     }
 
     loadCountryCeilingData(): void {
+        if (!this.caseId || !this.numbercommittee) {
+            console.warn('Missing required parameters: caseId or committee number');
+            return;
+        }
 
         this.committeePackageApiService
             .getCommitteePackage(this.caseId, this.numbercommittee)
