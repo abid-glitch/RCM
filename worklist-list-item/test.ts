@@ -14,17 +14,18 @@ import { RatingRecommendationService } from 'src/app/features/rating-recommendat
 import { RatingTemplate } from 'src/app/shared/models/RatingTemplate';
 import { EntityType } from 'src/app/shared/models/EntityType';
 import { Entity } from 'src/app/shared/models/Entity';
-import { catchError, concatMap, filter, finalize, map, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { catchError, concatMap, filter, finalize, map, of, switchMap, takeUntil, tap } from 'rxjs/operators';
 
 import { ContentLoaderService } from 'src/app/shared/services/content-loader.service';
 import { AnalystRole } from 'src/app/shared/models/AnalystRole';
 import {
     RatingRecommendationTableView,
+    RatingResponseValueTypes,
     RatingsTableMode
 } from '../../../features/rating-recommendation/enums/rating-recommendation.enum';
 import { CaseData } from '../../../shared/types/case-data';
 import { CasesService, CaseStatus } from '../../../shared/services/cases';
-import { of, Subject } from 'rxjs';
+import { Subject } from 'rxjs';
 import { generateKey, Rating } from '../../../features/rating-recommendation';
 import { UltimateParent } from '../../../shared/models/UltimateParent';
 import { RatingGroupType } from 'src/app/shared/models/RatingGroupType';
@@ -33,6 +34,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { UserProfile } from '@app/shared/models/UserProfile';
 import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
 import { CommitteeSupport } from '@app/shared/models/CommitteeSupport';
+import { CommitteeSupportService } from 'src/app/shared/services/committee-support.service';
 import { manageRecommendationEntityState } from '@app/features/rating-recommendation/utils/manageRecommendationEntityState';
 
 @Component({
@@ -90,7 +92,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
     isshowRatingRecommendation = false;
-    committeeSupportService: any;
+    
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -100,7 +102,8 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         private contentLoaderService: ContentLoaderService,
         private userProfileService: UserProfileService,
         public translate: TranslateService,
-        public featureFlagService: FeatureFlagService
+        public featureFlagService: FeatureFlagService,
+        private committeeSupportService: CommitteeSupportService
     ) {
         this.isCommitteeWorkflow =
             this.featureFlagService.isCommitteeWorkflowEnabled() ||
@@ -354,6 +357,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
     }
 
     private createCurrentEntityDictionary() {
+        // Clear previous dictionary to avoid stale data
+        this.selectedCaseEntityDictionary = {};
+        
         for (const entity of this.case.caseDataReference.entities) {
             const debt = entity.debts ?? [];
             const ratingClass = entity.ratingClasses ?? [];
@@ -396,135 +402,92 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
     
-
-    // private navigateToRatingRecommendationPage() {
-    //     this.contentLoaderService.show();
-        
-    //     this.casesService.getCaseById(this.case.id)
-    //         .pipe(
-    //             tap(committeeSupport => {
-    //                 console.log('Case data loaded:', committeeSupport);
-                    
-    //                 this.dataService.committeSupportWrapper = committeeSupport;
-                    
-    //                 this.createCurrentEntityDictionary();
-                
-                
-    //                 if (committeeSupport.entities?.length) {
-    //                     console.log('Setting entities in subject:', committeeSupport.entities);
-                        
-    //                     const processedEntities = committeeSupport.entities.map(entity => {
-    //                         return {
-    //                             ...entity,
-    //                             hasRatingRecommendation: true
-    //                         };
-    //                     });
-
-    //                     this.dataService.updateSelectedEntities(processedEntities)
-    //                     this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
-    //                 } else {
-    //                     console.warn('No entities found in case data');
-    //                 }
-    //             }),
-    //             finalize(() => {
-    //                 this.contentLoaderService.hide();
-    //                 // Navigate after ensuring data is ready
-    //                 setTimeout(() => {
-    //                     this.casesService.router.navigateByUrl(`${AppRoutes.RATING_RECOMMENDATION}`);
-    //                 }, 100); // Small delay to ensure data is processed
-    //             })
-    //         )
-    //         .subscribe(
-    //             () => console.log('Navigation preparation complete'),
-    //             error => {
-    //                 console.error('Error preparing for navigation:', error);
-    //                 this.contentLoaderService.hide();
-    //             }
-    //         );
-    // }
-
     private navigateToRatingRecommendationPage() {
-  this.contentLoaderService.show();
-  
-  this.casesService.getCaseById(this.case.id)
-    .pipe(
-      tap(committeeSupport => {
-        // Store the committee support data in the data service
-        this.dataService.committeSupportWrapper = committeeSupport;
+        this.contentLoaderService.show();
         
-        // Create entity dictionary for rating details
-        this.createCurrentEntityDictionary();
-        
-        // Process entities to ensure they have the right structure
-        if (committeeSupport.entities?.length) {
-          const processedEntities = committeeSupport.entities.map(entity => ({
-            ...entity,
-            ratingClasses: entity.ratingClasses || [],
-            debts: entity.debts || [],
-            outlook: entity.outlook || null,
-            rated: entity.rated || false,
-            hasRatingRecommendation: true
-          }));
-          
-          // Update the data service with structured entities
-          this.dataService.updateSelectedEntities(processedEntities);
-          
-          // Set table mode for rating recommendation
-          this.ratingRecommendationService.setRatingsTableMode({
-            tableMode: RatingsTableMode.EditRecommendation,
-            ratingsDetails: this.selectedCaseEntityDictionary
-          });
-          
-          
-          // Set default view
-          this.ratingRecommendationService.determineDefaultView();
-          
-          // Critical step: Update entities subject with proper sequence
-          this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
-        }
-      }),
-      // Pre-fetch rating recommendations to ensure data is loaded before navigation
-      switchMap(() => {
-        const entityIds = this.dataService.committeSupportWrapper.entities.map(entity => entity.id);
-        return this.committeeSupportService.getRatingRecommendations(entityIds).pipe(
-          tap(recommendations => {
-            // Process recommendations if needed
-            // const currentRecommendationClasses = manageRecommendationEntityState(
-            //   recommendations,
-              this.dataService.committeSupportWrapper.entities
-            //   this.ratingRecommendationService.getRatingsTableModeState()
-            // );
-            
-            // Set custom rating classes if applicable
-            this.ratingRecommendationService.setCustomRatingClassSubject(
-              this.dataService.committeSupportWrapper.entities
+        // Step 1: Get case data and prepare entities
+        this.casesService.getCaseById(this.case.id)
+            .pipe(
+                tap(committeeSupport => {
+                    console.log('Case data loaded:', committeeSupport);
+                    
+                    // Store the case data in the data service
+                    this.dataService.committeSupportWrapper = committeeSupport;
+                    
+                    // Create entity dictionary from case data
+                    this.createCurrentEntityDictionary();
+                    
+                    // Process and prepare entities
+                    if (committeeSupport.entities?.length) {
+                        const processedEntities = committeeSupport.entities.map(entity => ({
+                            ...entity,
+                            ratingClasses: entity.ratingClasses || [],
+                            debts: entity.debts || [],
+                            outlook: entity.outlook || null,
+                            rated: entity.rated || false,
+                            hasRatingRecommendation: true
+                        }));
+                        
+                        // Update data service with entities
+                        this.dataService.updateSelectedEntities(processedEntities);
+                        
+                        // Set table mode for rating recommendation
+                        this.ratingRecommendationService.setRatingsTableMode({
+                            tableMode: RatingsTableMode.EditRecommendation,
+                            ratingsDetails: this.selectedCaseEntityDictionary
+                        });
+                        
+                        // Set default view for the table
+                        this.ratingRecommendationService.determineDefaultView();
+                        
+                        // Update the entities subject so subscribers get notified
+                        this.ratingRecommendationService.selectedEntitiesSubject.next(processedEntities);
+                    }
+                }),
+                // Step 2: Pre-fetch rating recommendations for the entities
+                switchMap(() => {
+                    const entityIds = this.dataService.committeSupportWrapper.entities.map(entity => entity.id);
+                    console.log('Fetching ratings for entity IDs:', entityIds);
+                    
+                    // Make explicit API call to get rating recommendations
+                    return this.committeeSupportService.getRatingRecommendations(entityIds).pipe(
+                        tap(recommendations => {
+                            console.log('Rating recommendations loaded:', recommendations);
+                            
+                            if (recommendations && recommendations[RatingResponseValueTypes.Item]) {
+                                // Process rating recommendations if needed
+                                const currentRecommendationEntities = manageRecommendationEntityState(
+                                    recommendations,
+                                    this.dataService.committeSupportWrapper.entities,
+                                    this.ratingRecommendationService.getRatingsTableModeState()
+                                );
+                                
+                                // Set custom rating classes
+                                this.ratingRecommendationService.setCustomRatingClassSubject(
+                                    this.dataService.committeSupportWrapper.entities
+                                );
+                            }
+                        }),
+                        catchError(error => {
+                            console.error('Error loading rating recommendations:', error);
+                            return of(null); // Continue without failing the stream
+                        })
+                    );
+                }),
+                finalize(() => {
+                    // Navigate to rating recommendation page
+                    this.contentLoaderService.hide();
+                    this.casesService.router.navigateByUrl(`${AppRoutes.RATING_RECOMMENDATION}`);
+                })
+            )
+            .subscribe(
+                () => console.log('Rating recommendation data loaded successfully'),
+                error => {
+                    console.error('Failed to load rating recommendation data:', error);
+                    this.contentLoaderService.hide();
+                    // Show error notification to user
+                    console.error('Failed to load rating recommendation data');
+                }
             );
-          }),
-          catchError(error => {
-            console.error('Error loading rating recommendations:', error);
-            return of(null); // Continue without failing the stream
-          })
-        );
-      }),
-      finalize(() => {
-        this.contentLoaderService.hide();
-        this.casesService.router.navigateByUrl(
-          `${AppRoutes.RATING_RECOMMENDATION}`
-        );
-      })
-    )
-    .subscribe(
-      () => console.log('Rating recommendation data loaded successfully'),
-      error => {
-        console.error('Failed to load rating recommendation data:', error);
-        this.contentLoaderService.hide();
-        // Show error notification to user
-        console.error('Failed to load rating recommendation data');
-      }
-    );
+    }
 }
-
-}
-
-
-
