@@ -21,7 +21,17 @@
                     </div>
                 </div>
             </div>
-            <div class="w-1/12">
+            <div class="case-actionid-width">
+                <div class="case-meta">
+                    <div class="case-meta-title-space">
+                        {{ 'worklist.item.tableHeaders.actionId' | translate }}
+                    </div>
+                </div>
+                <div class="type">
+                    {{ case.actionIds }}
+                </div>
+            </div>
+            <div class="case-width">
                 <div class="case-meta">
                     <div class="case-meta-title-space">
                         {{ 'worklist.item.tableHeaders.camsId' | translate }}
@@ -31,7 +41,7 @@
                     {{ case.caseDataReference?.committeeMemoSetup?.conflictCheckId ?? '-' }}
                 </div>
             </div>
-            <div class="w-1/12">
+            <div class="case-width">
                 <div class="case-meta">
                     <div class="case-meta-title">
                         {{ 'worklist.item.tableHeaders.type' | translate }}
@@ -97,28 +107,20 @@
                         </button>
                     </li>
                     <li>
+                        
                         <button
-                            *ngIf="
+                        *ngIf="
                                 case.caseDataReference?.lastSaveAndDownloadDate !== undefined &&
-                                this.isCommitteeWorkflow
+                                this.isshowRatingRecommendation
                             "
                             blueMenuItem
-                            [attr.data-testid]="'workListMenu_' + rcMenuText.textContent"
-                            (click)="bluePopOverElement.closePopover(); openModal(rcMenuText.textContent)"
+                            [attr.data-testid]="'workListMenu_' + ratingRecommendationText.textContent"
+                            (click)="bluePopOverElement.closePopover(); openModal(ratingRecommendationText.textContent)"
                         >
-                            <span #rcMenuText>{{ 'worklist.item.menuData.ratingRecommendation' | translate }}</span>
+                            <span #ratingRecommendationText>{{ 'worklist.item.menuData.ratingRecommendation' | translate }}</span>
                         </button>
                     </li>
-                    <li>
-                        <button
-                            *ngIf="case.showAuthoring"
-                            blueMenuItem
-                            [attr.data-testid]="'workListMenu_' + authoringText.textContent"
-                            (click)="bluePopOverElement.closePopover(); openModal(authoringText.textContent)"
-                        >
-                            <span #authoringText>{{ 'worklist.item.menuData.authoring' | translate }}</span>
-                        </button>
-                    </li>
+
                     <li>
                         <button
                             *ngIf="
