@@ -1,0 +1,32 @@
+<div class="worklist-title-label">{{ 'worklist.title' | translate }}</div>
+<app-worklist-search
+    (sortOptionChangedEvent)="sortChanged($event)"
+    (dateFilterEvent)="dateFilterChanged($event)"
+    [caseNames]="retrieveCaseNames"
+    (searchedNameSelected)="searchByName($event)"
+    [resetDateValues]="resetFieldsSubject.asObservable()"
+    [defaultSort]="casesSort$.asObservable()"
+    [userProfile]="userProfile$ | async"
+></app-worklist-search>
+
+<app-worklist-empty
+    *ngIf="numOfCases === 0 && !isLoading"
+    [showSearchResultsSection]="showSearchResultsSection"
+    (clearFilterEvent)="clearFilterClicked()"
+></app-worklist-empty>
+
+<app-worklist-list
+    class="colLayout"
+    [cases]="displayedCases$ | async"
+    (caseEvent)="caseEventHandler($event)"
+    [userProfile]="userProfile$ | async"
+></app-worklist-list>
+<blue-paginator
+    [attr.data-testid]="'casePaginator'"
+    *ngIf="checkNumOfCasesIsNotZero()"
+    [totalPages]="totalPages"
+    [recordsPerPage]="recordsPerPage"
+    [numPagesVisible]="numPagesVisible"
+    (change)="onPageChange($event)"
+    #paginationRef
+></blue-paginator>
