@@ -53,6 +53,7 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
     lastModifiedDateFrom!: Date;
     lastModifiedDateTo!: Date;
     fullName: string;
+    allCases: Case[] = []; // Store all cases for filtering
 
     @ViewChild('paginationRef') paginator!: BluePaginator;
     displayedCases$!: Observable<Case[]>;
@@ -96,22 +97,34 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
         this.paginatorChanges$ = new BehaviorSubject<BluePaginatorState>(
             this.worklistService.getDefaultPageState(this.recordsPerPage)
         );
+        
+        // Subscribe to get all cases once for filtering
+        this.cases$.pipe(takeUntil(this.unsubscribe$)).subscribe(cases => {
+            if (cases) {
+                this.allCases = cases;
+            }
+        });
+        
         this.displayedCases$ = combineLatest([this.cases$, this.paginatorChanges$, this.casesSort$]).pipe(
             map(([cases, pagination, sortBy]) => {
                 if (cases != null) {
+                    let filteredCases = [...cases]; // Create a copy to avoid modifying the original array
+                    
+                    // Apply search filter if needed
                     if (this.casesSearch != null) {
-                        cases = cases.filter((x) => x.name === this.casesSearch);
+                        filteredCases = filteredCases.filter((x) => x.name === this.casesSearch);
                     }
-                    this.sortWorklist(sortBy, cases);
+                    
+                    this.sortWorklist(sortBy, filteredCases);
 
-                    this.calculateTotalPages(cases);
-                    this.numOfCases = cases.length;
+                    this.calculateTotalPages(filteredCases);
+                    this.numOfCases = filteredCases.length;
                     if (!this.showSearchResultsSection) {
                         this.showSearchResultsSection = this.numOfCases > 0;
                     }
                     this.isLoading = false;
 
-                    return this.worklistService.getPageData(cases, this.recordsPerPage, pagination.page);
+                    return this.worklistService.getPageData(filteredCases, this.recordsPerPage, pagination.page);
                 } else {
                     return [];
                 }
@@ -164,6 +177,10 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
         this.isLoading = true;
         this.sortProperty = null;
         this.worklistService.getAllCasesByDates(filter);
+        // Reset pagination when filter changes
+        if (this.paginator) {
+            this.paginator.triggerPageAction(BluePaginatorAction.First);
+        }
     }
 
     clearFilterClicked() {
@@ -171,6 +188,11 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
         this.sortProperty = null;
         this.resetFieldsSubject.next(true);
         this.worklistService.getAllCases();
+        this.casesSearch = null;
+        // Reset pagination when filter is cleared
+        if (this.paginator) {
+            this.paginator.triggerPageAction(BluePaginatorAction.First);
+        }
     }
 
     customSortFn = (case1: Case, case2: Case) => {
@@ -219,6 +241,20 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
     }
 
     onPageChange(event: BluePaginatorState) {
+        // Check if the current page is valid for the current filtered results
+        const currentlyFilteredCases = this.casesSearch ? 
+            this.allCases.filter(x => x.name === this.casesSearch) : 
+            this.allCases;
+            
+        const maxPages = Math.ceil(currentlyFilteredCases.length / this.recordsPerPage) || 1;
+        
+        // If the requested page is greater than the max available pages, adjust to the max
+        if (event.page > maxPages) {
+            event.page = maxPages;
+            event.firstRowIndex = (maxPages - 1) * this.recordsPerPage;
+            event.lastRowIndex = currentlyFilteredCases.length;
+        }
+        
         this.paginatorChanges$.next(event);
     }
 
@@ -240,6 +276,7 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
                     this.cases$.pipe(first()).subscribe((cases) => {
                         const index = cases.findIndex((caseObj) => caseObj.id === caseEvent.caseId);
                         cases.splice(index, 1);
+                        this.allCases = cases; // Update local copy of all cases
                         if (cases.length == 0) {
                             this.showSearchResultsSection = false;
                         }
@@ -253,7 +290,6 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
         }
     }
 
-    /*  TODO Fix nested subscription in this function*/
     updateCaseName(name: string, caseId: string) {
         if (name !== '') {
             this.isLoading = true;
@@ -277,6 +313,7 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
                         cases[index].name = name;
                         cases[index].lastModifiedDate = tempCase.lastModifiedDate;
 
+                        this.allCases = [...cases]; // Update local copy of all cases
                         this.worklistService.updateCases(cases);
                         return this.worklistService.updateCase(committeeSupport).pipe(first());
                     })
@@ -292,12 +329,23 @@ export class WorklistHomeComponent implements OnInit, OnDestroy {
     }
 
     searchByName(caseName: string) {
+        this.isLoading = true;
+        
         if (caseName == null) {
             this.casesSearch = null;
         } else {
             this.casesSearch = caseName;
         }
-        this.paginator.triggerPageAction(BluePaginatorAction.First);
+        
+        // Always reset to first page when searching
+        if (this.paginator) {
+            this.paginator.triggerPageAction(BluePaginatorAction.First);
+        } else {
+            // If paginator is not available yet, just reset the pagination state
+            this.paginatorChanges$.next(this.worklistService.getDefaultPageState(this.recordsPerPage));
+        }
+        
+        this.isLoading = false;
     }
 
     private resetPrimaryMethodology() {
