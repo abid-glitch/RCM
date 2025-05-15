@@ -1,50 +1,45 @@
-private navigateToRatingRecommendationPage() {
-    this.contentLoaderService.show();
+ ngOnInit() {
+        // Create entity dictionary to check for proposed ratings
+        this.createCurrentEntityDictionary();
+        
+        // Check if case has been saved/downloaded OR has proposed ratings
+        const hasProposedRatings = this.checkForProposedRatings();
+        const hasSavedOrDownloaded = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
+        
+        // Show Rating Recommendation if either condition is met
+        this.isshowRatingRecommendation = hasSavedOrDownloaded || hasProposedRatings;
+    }
     
-    this.casesService.getCaseById(this.case.id)
-        .pipe(
-            tap(committeeSupport => {
-                // Store case data and process entities
-                this.dataService.committeSupportWrapper = committeeSupport;
-                this.createCurrentEntityDictionary();
-                
-                if (committeeSupport.entities?.length) {
-                    // Update data service with entities
-                    this.dataService.updateSelectedEntities(committeeSupport.entities);
-                    
-                    // Set table mode for rating recommendation
-                    this.ratingRecommendationService.setRatingsTableMode({
-                        tableMode: RatingsTableMode.EditRecommendation,
-                        ratingsDetails: this.selectedCaseEntityDictionary
-                    });
+    // Check if any ratings have proposed values
+    private checkForProposedRatings(): boolean {
+        // First check if we have ratings in the dictionary
+        if (Object.keys(this.selectedCaseEntityDictionary).length > 0) {
+            // Check if any rating has a proposedRating value
+            return Object.values(this.selectedCaseEntityDictionary).some(rating => !!rating.proposedRating);
+        }
+        
+        // If no entities or ratings found in the dictionary, check entities directly
+        if (this.case.caseDataReference?.entities) {
+            for (const entity of this.case.caseDataReference.entities) {
+                // Check debt ratings
+                if (entity.debts?.length) {
+                    for (const debt of entity.debts) {
+                        if (debt.ratings?.some(rating => !!rating.proposedRating)) {
+                            return true;
+                        }
+                    }
                 }
-            }),
-            // Call committeePackageApiService to sync entity data
-            switchMap(() => {
-                const committeePackageData = {
-                    caseId: this.case.id,
-                    ratingCommittee: this.dataService.committeSupportWrapper.ratingCommitteeInfo || {},
-                    teamSetups: this.dataService.committeSupportWrapper.teamSetup || {},
-                    entityRatings: this.dataService.committeSupportWrapper.entities || [],
-                    packageDocuments: this.dataService.committeSupportWrapper.packageDocuments || []
-                };
                 
-                return this.committeePackageApiService.updateCommitteePackage(
-                    committeePackageData,
-                    committeePackageData.ratingCommittee.number || 0,
-                    false, false, [], [], false
-                );
-            }),
-            finalize(() => {
-                this.contentLoaderService.hide();
-                this.casesService.router.navigateByUrl(`${AppRoutes.RATING_RECOMMENDATION}`);
-            })
-        )
-        .subscribe(
-            () => console.log('Rating recommendation data loaded successfully'),
-            error => {
-                console.error('Failed to load rating recommendation data:', error);
-                this.contentLoaderService.hide();
+                // Check rating classes
+                if (entity.ratingClasses?.length) {
+                    for (const ratingClass of entity.ratingClasses) {
+                        if (ratingClass.ratings?.some(rating => !!rating.proposedRating)) {
+                            return true;
+                        }
+                    }
+                }
             }
-        );
-}
+        }
+        
+        return false;
+    }
