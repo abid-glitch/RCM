@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 
 import { BlueModalRef, BluePopoverAnchor } from '@moodys/blue-ng';
 import { Case, CasesActions } from '../../types/case';
@@ -33,12 +33,13 @@ import { TranslateService } from '@ngx-translate/core';
 import { UserProfile } from '@app/shared/models/UserProfile';
 import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
 
+
 @Component({
     selector: 'app-worklist-list-item',
     templateUrl: './worklist-list-item.component.html',
     styleUrls: ['./worklist-list-item.component.scss']
 })
-export class WorklistListItemComponent implements OnInit, OnDestroy {
+export class WorklistListItemComponent implements OnDestroy {
     @Input()
     case: Case;
     @Input()
@@ -87,8 +88,9 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
 
     menuIncludeRatingCommittee = false;
     isCommitteeWorkflow = false;
-    isshowRatingRecommendation = true;
-    showRatingRecommendationOption = false;
+    isshowRatingRecommendation = false;
+    isGotoRecommendationScreen:boolean=false;
+    rating : Rating[] 
     constructor(
         private dataService: DataService,
         private router: Router,
@@ -127,14 +129,11 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             this.goToEntitySelection();
         } else if (value === 'Rating Committee') {
             this.navigateToInviteesPage();
-        } else if (value === 'Authoring') {
-            this.navigateToAuthoringPage();
         }
-
-        else if (value === 'Rating Recommendation'){
-            this.navigateToRatingRecommendationPage();
+            else if (value === 'Rating Recommendation'){
+            this.isGotoRecommendationScreen=true;
+            this.openExistingCase();
         }
-        
     }
 
     goToEntitySelection() {
@@ -143,7 +142,6 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.dataService.isExistingCase = true;
         this.prepareTransition();
     }
-
 
     prepareTransition() {
         this.clearEntity();
@@ -182,7 +180,13 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 filter(() => this.selectedCaseAction === CasesActions.EditCase),
                 finalize(() => {
                     this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    if(this.isGotoRecommendationScreen){
+                        this.propogateSelectedEntities();
+                        this.router.navigateByUrl(AppRoutes.RATING_RECOMMENDATION);
+                    }
+                    else{
+                        this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    }
                 }),
                 takeUntil(this.unSubscribe$)
             )
@@ -206,7 +210,13 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
                 tap((caseResp) => this.dataService.setCaseId(caseResp.id)),
                 finalize(() => {
                     this.contentLoaderService.hide();
-                    this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    if(this.isGotoRecommendationScreen){
+                        this.propogateSelectedEntities();
+                        this.router.navigateByUrl(AppRoutes.RATING_RECOMMENDATION);
+                    }
+                    else{
+                        this.router.navigateByUrl(this.actionRoutes[this.selectedCaseAction]);
+                    }  
                 }),
                 takeUntil(this.unSubscribe$)
             )
@@ -274,7 +284,7 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         const caseData: CaseData = {
             ...this.case.caseDataReference,
             ratingCommitteeInfo: excludeExpected,
-            committeeMemoSetup: excludeConflictCheckId,
+            committeeMemoSetup: excludeConflictCheckId
         };
         /*TODO REFACTOR THIS CODE */
         if (this.selectedCaseAction === CasesActions.CreateFromExisting) {
@@ -312,25 +322,12 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
         this.dataService.clearCommitteeSetupPage();
     }
 
-    ngOnInit() {
-        const hasProposedRating = this.case.caseDataReference?.entities?.some((entity) =>
-            entity.ratingClasses?.some((ratingClass) =>
-                ratingClass.ratings?.some((rating) => rating.proposedRating !== undefined)
-            )
-        );
-
-        // this.showRatingRecommendation = !!this.case.caseDataReference?.lastSaveAndDownloadDate;
-        const isRatingCommitteeWorkflow =
-            (this.featureFlagService.isCommitteeWorkflowEnabled() && this.isRatingCommitteeWorkflowEnabledSOV()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledFIG() && this.isRatingCommitteeWorkflowEnabledFIG()) ||
-            (this.featureFlagService.isCommitteeWorkflowEnabledCFG() && this.isRatingCommitteeWorkflowEnabledCFG());
-        this.case.showAuthoring =
-            hasProposedRating && isRatingCommitteeWorkflow && this.case.caseDataReference.ratingCommitteeMemo;
-
-        // this.case.showRatingRecommendation = hasProposedRating && (this.case.caseDataReference.case === CaseStatus.InProgress || this.case.status === CaseStatus.Completed)
-        this.showRatingRecommendationOption = !!localStorage.getItem(`case-${this.case.id}-saved`)
-
-
+    ngOnInit(){
+        const hasProposedRating = this.rating && this.rating.some(r => r.proposedRating);
+        // const isSavedCase = this.ratingRecommendationService.isCaseSaved(this.case.id) || 
+        // !!this.case.caseDataReference?.lastSaveAndDownloadDate;
+    
+        this.isshowRatingRecommendation = hasProposedRating 
     }
 
     isRatingCommitteeWorkflowEnabledSOV() {
@@ -389,23 +386,29 @@ export class WorklistListItemComponent implements OnInit, OnDestroy {
             });
     }
 
-    private navigateToAuthoringPage() {
-        this.contentLoaderService.show();
-        this.casesService.router
-            .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.EXECUTIVE_SUMMARY}`)
-            .then(() => {
-                this.contentLoaderService.hide();
-            });
+     propogateSelectedEntities() {
+        const selectedEntities: Entity[] = this.getSelectedEntities();
+        this.dataService.updateSelectedEntities(selectedEntities);
+            this.ratingRecommendationService.setSelectedTemplate(this.dataService.selectedTemplateType);
+            this.ratingRecommendationService.setSelectedEntities(selectedEntities);        
     }
-
-    private navigateToRatingRecommendationPage(){
-        this.contentLoaderService.show();
-        this.casesService.router
-        .navigateByUrl(`${AppRoutes.CASE}/${this.case.id}/${AppRoutes.RATING_RECOMMENDATION}`)
-        .then(() => {
-            this.contentLoaderService.hide();
-        })
-
-    }}
-
-
+ 
+    getSelectedEntities(): Entity[] {
+        const selectedEntities: Entity[] = [];
+        this.entityService.selectedOrgTobeImpacted.forEach((org) =>
+            selectedEntities.push(
+                new Entity({
+                    id: org.id,
+                    name: org.name,
+                    type: org.type,
+                    analysts: org.analysts,
+                    rated: org.rated,
+                    category: org.category,
+                    domicile: org.domicile,
+                    productLineDescription: org.productLineDescription
+                } as Entity)
+            )
+        );
+        return selectedEntities;
+    }
+}
