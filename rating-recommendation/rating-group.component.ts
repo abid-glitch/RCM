@@ -270,7 +270,7 @@ export class RatingGroupComponent implements OnInit, OnDestroy {
         this.dataService.clearCommitteeSetupPage();
         this.dataService.clearHomePageData();
         this.smartDefaultService.resetIsUsingSmartDefault();
-        // this.ratingRecommendationService.resetRatingRecommendationTable();
+        this.ratingRecommendationService.resetRatingRecommendationTable();
         this.commonMethodologyService.methodologyService.clearMethodologyFlagsAndSelections();
         this.commonMethodologyService.primaryMethodologyService.resetPrimaryMethodology();
         this.dataService.hasSelectedTemplate = false;
