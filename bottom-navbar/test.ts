@@ -58,7 +58,6 @@
 
 
 
-
 /*Manages save current case and download document */
 saveAndDownload(config?: RatingRecommendationSaveAndDownloadConfig): void {
     this.loading$.next(true);
@@ -82,8 +81,13 @@ saveAndDownload(config?: RatingRecommendationSaveAndDownloadConfig): void {
                     if (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) {
                         this.resetToHomePage();
                     }
-                    // Navigate when config exists (modal was shown)
+                    // Navigate when modal was shown (config exists means modal was displayed)
                     else {
+                        this.resetToHomePage();
+                    }
+                } else {
+                    // Handle PIF case - no modal shown but should navigate to worklist for PIF
+                    if (this.shouldNavigateToWorklistWithoutModal()) {
                         this.resetToHomePage();
                     }
                 }
@@ -96,25 +100,22 @@ saveAndDownload(config?: RatingRecommendationSaveAndDownloadConfig): void {
         .subscribe();
 }
 
+// Keep original method unchanged - only for modal display logic
 checkIfModalIsApplicableForRatingGroup() {
+    return (
+        this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGCoveredBonds ||
+        this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGPrimary ||
+        this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.NonBanking
+    );
+}
+
+// New method specifically for navigation logic
+private shouldNavigateToWorklistWithoutModal(): boolean {
     const ratingGroup = this.dataService.committeSupportWrapper?.ratingGroupTemplate;
     
-    // Original 3 groups that were working
-    const originalGroups = [
-        RatingGroupType.SFGCoveredBonds,
-        RatingGroupType.SFGPrimary, 
-        RatingGroupType.NonBanking
-    ];
-    
-    // Additional SFG groups
-    const additionalSFGGroups = [
-        RatingGroupType.SFGRACDecisionMemo,
-        RatingGroupType.SFGSurveillance
-    ];
-    
-    // PPIF groups
+    // PIF and other PPIF groups that don't show modal but should navigate to worklist
     const ppifGroups = [
-        RatingGroupType.InfrastructureProjectFinance,
+        RatingGroupType.InfrastructureProjectFinance, // PIF
         RatingGroupType.MSPG,
         RatingGroupType.SubSovereign,
         RatingGroupType.SovereignBond,
@@ -122,7 +123,5 @@ checkIfModalIsApplicableForRatingGroup() {
         RatingGroupType.PFG
     ];
     
-    return originalGroups.includes(ratingGroup) || 
-           additionalSFGGroups.includes(ratingGroup) || 
-           ppifGroups.includes(ratingGroup);
+    return ppifGroups.includes(ratingGroup);
 }
