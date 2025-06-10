@@ -21,8 +21,8 @@ saveAndDownload(config?: RatingRecommendationSaveAndDownloadConfig): void {
                     if (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) {
                         this.resetToHomePage();
                     }
-                    // Navigate for SFG and PPIF rating groups when any document is selected
-                    else if (this.isSFGOrPPIFLOB()) {
+                    // For SFG/PPIF LOBs - navigate when modal was used (any document selection)
+                    else if (this.shouldNavigateToWorklistForCurrentRatingGroup()) {
                         this.resetToHomePage();
                     }
                 }
@@ -36,28 +36,21 @@ saveAndDownload(config?: RatingRecommendationSaveAndDownloadConfig): void {
 }
 
 /**
- * Check if current rating group belongs to SFG or PPIF LOBs
+ * Check if current rating group should navigate to worklist
+ * Uses string matching to avoid import issues
  */
-private isSFGOrPPIFLOB(): boolean {
-    const currentRatingGroup = this.dataService.committeSupportWrapper.ratingGroupTemplate;
+private shouldNavigateToWorklistForCurrentRatingGroup(): boolean {
+    const currentRatingGroup = this.dataService.committeSupportWrapper?.ratingGroupTemplate;
     
-    // SFG rating groups
-    const sfgGroups = [
-        RatingGroupType.SFGCoveredBonds,
-        RatingGroupType.SFGPrimary,
-        RatingGroupType.SFGRACDecisionMemo,
-        RatingGroupType.SFGSurveillance
-    ];
+    if (!currentRatingGroup) {
+        return false;
+    }
     
-    // PPIF rating groups
-    const ppifGroups = [
-        RatingGroupType.InfrastructureProjectFinance,
-        RatingGroupType.MSPG,
-        RatingGroupType.SubSovereign,
-        RatingGroupType.SovereignBond,
-        RatingGroupType.SovereignMDB,
-        RatingGroupType.PFG
-    ];
+    // SFG rating groups (string values)
+    const sfgGroups = ['SFG_COVERED_BONDS', 'SFG_PRIMARY', 'SFG_RAC_DECISION_MEMO', 'SFG_SURVEILLANCE'];
+    
+    // PPIF rating groups (string values)
+    const ppifGroups = ['PIF', 'MSPG', 'SUB_SOVEREIGN', 'SOVEREIGN_BOND', 'SOVEREIGN_MDB', 'PFG'];
     
     return sfgGroups.includes(currentRatingGroup) || ppifGroups.includes(currentRatingGroup);
 }
