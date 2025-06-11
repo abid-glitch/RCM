@@ -478,8 +478,13 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
     checkRatingGroup(){
         return (
-            RatingGroupType.MSPG,
-            RatingGroupType.PFG
+            InfrastructureProjectFinance = 'PIF',
+            MSPG = 'MSPG',
+            PFG = 'PFG',
+            SFGCoveredBonds = 'SFG_COVERED_BONDS',
+            SFGPrimary = 'SFG_PRIMARY',
+            SFGRACDecisionMemo = 'SFG_RAC_DECISION_MEMO',
+            SFGSurveillance = 'SFG_SURVEILLANCE',
         )
     }
 
