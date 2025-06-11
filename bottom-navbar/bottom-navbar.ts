@@ -464,7 +464,7 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     this.onClickDownload(config);
                 }),
                 tap(() => {
-                    if (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) {
+                    if (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) || (this.checkRatingGroup()) {
                         this.resetToHomePage();
                     }
                 }),
@@ -474,6 +474,13 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                 debounceTime(120000)
             )
             .subscribe();
+    }
+
+    checkRatingGroup(){
+        return (
+            RatingGroupType.MSPG,
+            RatingGroupType.PFG
+        )
     }
 
     /*Old Implementation For Downloading Document*/
