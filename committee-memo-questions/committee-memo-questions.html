@@ -186,34 +186,38 @@
                     </blue-button-toggle>
                 </div>
             </div>
-            <!-- <div class="questions-item" *ngIf="isLGDModelUsedEnabled">
-        <div
-            class="credit-model-question"
-            *ngIf="
-                selectedRatingGroup == (RatingGroupsEnum.CFG)
-            "
-        >
-            <div>{{ 'committeeSetupProperties.lgdModelUsed.question' | translate }}</div>
-        </div>
-        <div class="choice">
-            <blue-button-toggle [(ngModel)]="committeeInfo.lgdModelUsed" id="lgdModelChoice">
-                <button
-                    blueButtonToggleItem
-                    [attr.data-testid]="'lgdModelUsed_' + yesNoUnknownOptions.Yes"
-                    [value]="yesNoUnknownOptions.Yes"
+            <div class="questions-item" *ngIf="isLGDModelUsedEnabled">
+                <div
+                    class="credit-model-question"
+                    *ngIf="
+                        selectedRatingGroup !==
+                        (RatingGroupsEnum.SubSovereign ||
+                            RatingGroupsEnum.SovereignBond ||
+                            RatingGroupsEnum.SovereignMDB)
+                    "
                 >
-                    {{ 'yesNoOptions.YES' | translate }}
-                </button>
-                <button
-                    blueButtonToggleItem
-                    [attr.data-testid]="'lgdModelUsed_' + yesNoUnknownOptions.No"
-                    [value]="yesNoUnknownOptions.No"
-                >
-                    {{ 'yesNoOptions.NO' | translate }}
-                </button>
-            </blue-button-toggle>
-        </div>
-    </div> -->
+                    <div>{{ 'committeeSetupProperties.lgdModelUsed.question' | translate }}</div>
+                </div>
+                <div class="choice">
+                    <blue-button-toggle [(ngModel)]="committeeInfo.lgdModelUsed" id="lgdModelChoice">
+                        <button
+                            blueButtonToggleItem
+                            [attr.data-testid]="'lgdModelUsed_' + yesNoUnknownOptions.No"
+                            [value]="yesNoUnknownOptions.No"
+                        >
+                            {{ 'yesNoOptions.NO' | translate }}
+                        </button>
+                        <button
+                            blueButtonToggleItem
+                            [attr.data-testid]="'lgdModelUsed_' + yesNoUnknownOptions.Yes"
+                            [value]="yesNoUnknownOptions.Yes"
+                        >
+                            {{ 'yesNoOptions.YES' | translate }}
+                        </button>
+                    </blue-button-toggle>
+                </div>
+            </div>
+
             <div class="crqt-note" *ngIf="committeeInfo.referenceOnlyCRQT === yesNoUnknownOptions.Yes">
                 <svg blueIcon="info"></svg>
                 <span>{{ 'committeeSetupProperties.crqt.note.clearlyMark' | translate }}</span>
