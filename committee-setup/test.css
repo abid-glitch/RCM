@@ -11,22 +11,73 @@
 
 /* Position the checkbox properly within the form layout */
 blue-field[inline] {
-  display: flex;
-  align-items: center;
-  margin: 16px 0;
-  gap: 12px;
+  display: flex !important;
+  align-items: center !important;
+  margin: 16px 0 !important;
+  gap: 12px !important;
 }
 
 /* Ensure proper alignment and spacing */
 blue-field[inline] input[blueCheckbox] {
-  margin: 0;
-  flex-shrink: 0;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
 }
 
 blue-field[inline] label[blueFieldLabel] {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 400;
-  color: #333;
-  cursor: pointer;
+  margin: 0 !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: #333 !important;
+  cursor: pointer !important;
+}
+
+/* Custom checkbox styling to match the image */
+input[type="checkbox"][blueCheckbox] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  width: 18px !important;
+  height: 18px !important;
+  border: 2px solid #d1d5db !important;
+  border-radius: 3px !important;
+  background-color: white !important;
+  cursor: pointer !important;
+  position: relative !important;
+  transition: all 0.2s ease !important;
+}
+
+input[type="checkbox"][blueCheckbox]:hover {
+  border-color: #3b82f6 !important;
+}
+
+input[type="checkbox"][blueCheckbox]:checked {
+  background-color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
+input[type="checkbox"][blueCheckbox]:checked::after {
+  content: '✓' !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: white !important;
+  font-size: 12px !important;
+  font-weight: bold !important;
+  line-height: 1 !important;
+}
+
+/* Focus state for accessibility */
+input[type="checkbox"][blueCheckbox]:focus {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
+
+/* Alternative selector in case blue-field doesn't work */
+.blue-field[inline],
+[blue-field][inline] {
+  display: flex !important;
+  align-items: center !important;
+  margin: 16px 0 !important;
+  gap: 12px !important;
 }
