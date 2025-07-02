@@ -35,20 +35,17 @@
                         (ngModelChange)="updateModel()"
                     />
                 </blue-field>
-                        <div class="checkbox-container">
-            <input
-                blueCheckbox
-                type="checkbox"
-                id="rasDocumentCheckbox"
-                [attr.data-testid]="'rasDocumentCheckbox'"
-
-            />
-            <label class="checkbox-label" for="rasDocumentCheckbox">
-                checkbox
-            </label>
-        </div>
-
-                
+                <div class="checkbox-container">
+                    <input
+                        blueCheckbox
+                        type="checkbox"
+                        id="rasDocumentCheckbox"
+                        [attr.data-testid]="'rasDocumentCheckbox'"
+                        [(ngModel)]="committeeMemo.rasDocumentReq"
+                        (ngModelChange)="updateModel()"
+                    />
+                    <label class="checkbox-label" for="rasDocumentCheckbox">{{''committeeSetupProperties.rasDocumentReq' | translate}}</label>
+                </div>
             </div>
             <blue-field
                 [label]="'committeeSetupProperties.rcmQuestions.committeeNumberLabel' | translate"
