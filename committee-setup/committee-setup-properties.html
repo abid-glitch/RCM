@@ -1,0 +1,150 @@
+<!-- CODE_DEBT: Consider breaking into multiple modules  -->
+
+<div class="main-container">
+    <div *ngIf="!isCamsIDValid" class="text-red-500">
+        <svg blueIcon="alert-octagon" class="alert-icon"></svg>
+        {{ 'committeeSetupProperties.camsIDErrorMessage' | translate }}
+    </div>
+    <div class="rcm-header-inputs">
+        <app-shared-date-picker
+            [label]="'actionSetupProperties.initialQuestions.expectedRatingCommitteeTitle' | translate"
+            [minDate]="minDate"
+            [maxDate]="maxDate"
+            (dateChanged)="updateModel()"
+            [(ratingDate)]="ratingComitteeDate"
+        ></app-shared-date-picker>
+        <div class="content committee-info">
+            <div class="cams">
+                <span
+                    class="cams-label leading-10 field-label"
+                    [ngClass]="{
+                        'text-red-500': !isCamsIDValid
+                    }"
+                >
+                    {{ 'committeeSetupProperties.rcmQuestions.conflictAndAttestationMgmnt' | translate }}&nbsp; &nbsp;{{
+                        'committeeSetupProperties.rcmQuestions.numericOnly' | translate
+                    }}
+                </span>
+                <blue-field class="-p-1" for="camsId">
+                    <input
+                        id="camsId"
+                        [attr.data-testid]="'camsId'"
+                        [numbersOnly]="true"
+                        blueInput
+                        [(ngModel)]="committeeMemo.conflictCheckId"
+                        (ngModelChange)="updateModel()"
+                    />
+                </blue-field>
+            </div>
+            <blue-field
+                [label]="'committeeSetupProperties.rcmQuestions.committeeNumberLabel' | translate"
+                for="committeNumber"
+                class="m-0"
+            >
+                <select
+                    id="committeeNumber"
+                    blueSelect
+                    [(ngModel)]="committeeNumber"
+                    [attr.data-testid]="'committeeNumber'"
+                    (ngModelChange)="updateModel()"
+                >
+                    <option [ngValue]="undefined">Select</option>
+                    <option *ngFor="let committeeNumber of committeNumberOptions" [value]="committeeNumber">
+                        {{ committeeNumber }}
+                    </option>
+                </select>
+            </blue-field>
+        </div>
+        <div class="content committee-reason-wrapper">
+            <blue-field *ngIf="showReasonTextArea" [label]="reasonLabel" class="select-reason-label" for="otherReason">
+                <textarea
+                    id="otherReason"
+                    blueTextarea
+                    [attr.data-testid]="'otherReason'"
+                    [(ngModel)]="committeeMemo.reason"
+                    (ngModelChange)="updateModelWithOtherReason()"
+                ></textarea>
+            </blue-field>
+            <blue-field
+                *ngIf="showReasonDropDown"
+                [label]="reasonLabel"
+                class="select-reason-label"
+                for="reasonDropDown"
+            >
+                <ng-container
+                    *ngIf="
+                        selectedRatingGroup === selectedRatingGroupsEnum.SovereignBond ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.SubSovereign ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.SovereignMDB ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.BankingFinanceSecurities ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.NonBanking ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.Insurance ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.CFG
+                        else otherGrp
+                    "
+                >
+                    <blue-multiselect
+                        #dataSource
+                        id="dataSource"
+                        name="dataSource"
+                        (ngModelChange)="updateRatingCommitteeReasonsOptions($event)"
+                        (click)="handleBlurEvent(dataSource)"
+                        [options]="ratingCommitteeReasonsOptions"
+                        [(ngModel)]="committeeMemo.ratingCommitteeReasons"
+                        placeholder="Type to search..."
+                    ></blue-multiselect>
+                </ng-container>
+                <ng-template #otherGrp>
+                    <select
+                        id="reasonDropDown"
+                        [attr.data-testid]="'reasonDropDown'"
+                        blueSelect
+                        [(ngModel)]="committeeReason"
+                        (ngModelChange)="committeeReasonChange()"
+                    >
+                        <option
+                            *ngFor="
+                                let option of reasonsForGroupC(dataService.committeSupportWrapper.ratingGroupTemplate)
+                            "
+                            [value]="option"
+                        >
+                            {{ 'committeeSetupProperties.committeeReason.options.' + option | translate }}
+                        </option>
+                    </select>
+                    <span class="other-reason-label">
+                        {{ 'committeeSetupProperties.committeeReason.otherReason' | translate }}
+                    </span>
+                </ng-template>
+            </blue-field>
+            <div class="committee-info-reason">
+                <textarea
+                    blueTextarea
+                    *ngIf="committeeReason === committeeReasonType.Other"
+                    [(ngModel)]="committeeMemo.reason"
+                    (ngModelChange)="updateModelWithOtherReason()"
+                ></textarea>
+            </div>
+        </div>
+    </div>
+    <div *ngIf="!usePrimaryMethodologyRedesign">
+        <app-primary-methodology
+            [selectedPrimaryMethodologyFromList]="selectedPrimaryMethodologyFromList"
+            [prDisclosure]="prDisclosure"
+            [showPrimaryMethodologyFlag]="showPrimaryMethodologyFlag"
+            (updatePrimaryMethodologyFromList)="updatePrimaryMethodologyFromList($event)"
+            (updatePrimaryMethodologyRef)="updatePrimaryMethodologyRef($event)"
+            (updatePrDisclosure)="updatePrDisclosureMoreInfoAndArabic($event)"
+            (updateRatingMethodologyFlag)="showRatingMethodologyQuestions($event)"
+            (updateDisplayedMethodology)="updateDisplayedMethodology($event)"
+            [selectedRatingGroup]="selectedRatingGroup"
+        ></app-primary-methodology>
+    </div>
+</div>
+<app-methodology-assumption-questions
+    *ngIf="!usePrimaryMethodologyRedesign"
+    [showRatingMethodologyFlag]="showRatingMethodologyFlag"
+    [selectedPrimaryMethodologyFromList]="selectedPrimaryMethodologyCombined"
+    [primaryMethodologyRef]="primaryMethodologyRef"
+    [prDisclosure]="prDisclosure"
+    [isRatingCommitteeMemo]="true"
+></app-methodology-assumption-questions>
