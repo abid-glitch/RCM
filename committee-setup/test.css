@@ -1,25 +1,117 @@
-<div class="checkbox-container">
-    <input blueCheckbox type="checkbox" id="rasDocumentCheckbox" 
-           [attr.data-testid]="'rasDocumentCheckbox'"
-           [(ngModel)]="isRasDocumentSelected"
-           (ngModelChange)="onRasDocumentChange()" />
-    <label class="checkbox-label" for="rasDocumentCheckbox">
-        {{ 'committeeSetupProperties.rasDocument.label' | translate }}
-    </label>
-</div>
+<ng-container *ngIf="userProfile$ | async as userProfile">
+    <blue-sticky-bar class="sticky-bar-bottom sticky-bar sticky-bar-offset" [class.z-20]="isEntitySelectionSection">
+        <ng-container *ngIf="prevPage">
+            <div class="sticky-bar-start" (click)="navBack()" (keydown)="navBack()" tabindex="0">
+                <button
+                    class="button button-secondary"
+                    id="{{ navMetaData?.prevButton?.buttonId }}"
+                    [attr.data-testid]="navMetaData?.prevButton?.buttonId"
+                >
+                    {{ navMetaData?.prevButton?.buttonLabel | translate }}
+                </button>
+            </div>
+        </ng-container>
+
+        <div class="sticky-bar-end">
+            <ng-container *ngTemplateOutlet="cancelButton"></ng-container>
+            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
+            <ng-container *ngTemplateOutlet="continueButton"></ng-container>
+        </div>
+    </blue-sticky-bar>
+
+    <ng-template #saveButton>
+        <button
+            *ngIf="
+                userProfile.roleReadWrite &&
+                !isFinalized &&
+                isRatingRecommendation &&
+                (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection)
+            "
+            id="saveBtn"
+            [attr.data-testid]="'saveBtn'"
+            class="button button-secondary"
+            (click)="onClickedSaveButton()"
+            [disabled]="
+                (loading$ | async) ||
+                (isEntitySelectionSection && !sectionIsValid) ||
+                !entityService.selectedOrgTobeImpacted.length
+            "
+        >
+            {{ 'navigationControl.saveLabel' | translate }}
+        </button>
+    </ng-template>
+
+    <ng-template #cancelButton>
+        <button
+            *ngIf="
+                userProfile.roleReadWrite &&
+                !isFinalized &&
+                (this.isRatingRecommendation
+                    ? !!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection
+                    : prevPage)
+            "
+            id="cancelBtn"
+            [attr.data-testid]="'cancelBtn'"
+            class="button button-secondary bg-transparent border-0 shadow-none"
+            (click)="confirmCancelSelection()"
+        >
+            {{ 'navigationControl.cancelLabel' | translate }}
+        </button>
+    </ng-template>
+    
+    <ng-template #continueButton>
+        <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtn">
+            <button
+                id="{{ navMetaData?.nextButton?.buttonId }}"
+                [attr.data-testid]="navMetaData?.nextButton?.buttonId"
+                class="button"
+                [disabled]="
+                    !sectionIsValid ||
+                    (loading$ | async) ||
+                    (isDownloadStage &&
+                        (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)) ||
+                    !isSaveEnabled
+                "
+                (click)="isRasDocumentRequired && isRatingRecommendation && (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) && !isDownloadStage ? onClickedRasDownload() : confirmContinueSelection()"
+            >
+                {{
+                    getButtonText()
+                }}
+            </button>
+        </ng-container>
+        <ng-template #continueBtn>
+            <button
+                *ngIf="!isDownloadStage || (isDownloadStage && isCommitteeWorkflow && isRatingCommitteeWorkflow)"
+                id="{{ navMetaData?.nextButton?.buttonId }}-continue"
+                [attr.data-testid]="navMetaData?.nextButton?.buttonId + '-continue'"
+                class="button"
+                (click)="confirmContinueSelection(false)"
+            >
+                {{ 'navigationControl.continueLabel' | translate }}
+            </button>
+        </ng-template>
+    </ng-template>
+</ng-container>
 
 
-.checkbox-container {
-  display: flex !important;
-  align-items: center !important;
-  margin: 16px 0 !important;
-  gap: 12px !important;
-}
 
-.checkbox-label {
-  margin: 0 !important;
-  font-size: 14px !important;
-  font-weight: 400 !important;
-  color: #333 !important;
-  cursor: pointer !important;
+getButtonText(): string {
+    // Only show RAS DOWNLOAD text when specifically on rating-recommendation page
+    // and RAS document is required and not in download stage
+    if (this.isRatingRecommendation && 
+        this.isRasDocumentRequired && 
+        (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
+        !this.isDownloadStage) {
+        return this.translateService.instant('navigationControl.rasDownloadLabel');
+    }
+    
+    // Show SAVE & CONTINUE when on rating-recommendation page but RAS not required
+    if (this.isRatingRecommendation &&
+        (!!this.entityService.selectedOrgTobeImpacted.length || this.isEntitySelectionSection) &&
+        !this.isDownloadStage) {
+        return this.translateService.instant('navigationControl.saveAndContinue');
+    }
+    
+    // Default button text for other pages
+    return this.translateService.instant(this.navMetaData?.nextButton?.buttonLabel || 'navigationControl.continueLabel');
 }
