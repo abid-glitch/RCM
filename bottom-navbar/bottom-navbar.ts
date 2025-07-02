@@ -180,12 +180,25 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     }
 
     onClickedRasDownload():void{
-        this.saveCurrentState()
+        if(this.isRasDocumentRequired){
+                    this.saveCurrentState()
         this.initiateRasDownload()
+        }
+        else{
+            this.confirmContinueSelection()
+        }
     }
 
     private saveCurrentState():void{
-        if(this.dataService?.committeSupportWrapper?.committeeMemoSetup){}
+        if(this.dataService?.committeSupportWrapper?.committeeMemoSetup){
+            this.isSaveAction = true
+            this.loading$.next(true)
+
+            if(this.currentUrl?.includes(AppRoutes.COMMITTEE_SETUP_PROPERTIES) || this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)){
+                this.dataService.initialCommitteeSupport = _.cloneDeep(this.dataService.committeSupportWrapper);
+            }
+            this.updateOrCreateNewCase(true)
+        }
     }
     private initiateRasDownload():void{
         console.log("Ras Download ... ")
