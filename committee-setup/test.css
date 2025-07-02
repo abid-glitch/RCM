@@ -1,62 +1,154 @@
-.col-right {
-  display: flex;
-  align-items: center;
-  margin-top: 16px;
-  margin-bottom: 16px;
-}
+<!-- CODE_DEBT: Consider breaking into multiple modules  -->
 
-.row.subcomponent-selection {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-}
-
-.subcomponent-name {
-  font-size: 14px;
-  font-weight: 400;
-  color: #333;
-  white-space: nowrap;
-}
-
-/* Custom checkbox styling to match the image */
-input[type="checkbox"][blueCheckbox] {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #d1d5db;
-  border-radius: 3px;
-  background-color: white;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-input[type="checkbox"][blueCheckbox]:hover {
-  border-color: #3b82f6;
-}
-
-input[type="checkbox"][blueCheckbox]:checked {
-  background-color: #3b82f6;
-  border-color: #3b82f6;
-}
-
-input[type="checkbox"][blueCheckbox]:checked::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
-  line-height: 1;
-}
-
-/* Focus state for accessibility */
-input[type="checkbox"][blueCheckbox]:focus {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
+<div class="main-container">
+    <div *ngIf="!isCamsIDValid" class="text-red-500">
+        <svg blueIcon="alert-octagon" class="alert-icon"></svg>
+        {{ 'committeeSetupProperties.camsIDErrorMessage' | translate }}
+    </div>
+    <div class="rcm-header-inputs">
+        <app-shared-date-picker
+            [label]="'actionSetupProperties.initialQuestions.expectedRatingCommitteeTitle' | translate"
+            [minDate]="minDate"
+            [maxDate]="maxDate"
+            (dateChanged)="updateModel()"
+            [(ratingDate)]="ratingComitteeDate"
+        ></app-shared-date-picker>
+        <div class="content committee-info">
+            <div class="cams">
+                <span
+                    class="cams-label leading-10 field-label"
+                    [ngClass]="{
+                        'text-red-500': !isCamsIDValid
+                    }"
+                >
+                    {{ 'committeeSetupProperties.rcmQuestions.conflictAndAttestationMgmnt' | translate }}&nbsp; &nbsp;{{
+                        'committeeSetupProperties.rcmQuestions.numericOnly' | translate
+                    }}
+                </span>
+                <blue-field class="-p-1" for="camsId">
+                    <input
+                        id="camsId"
+                        [attr.data-testid]="'camsId'"
+                        [numbersOnly]="true"
+                        blueInput
+                        [(ngModel)]="committeeMemo.conflictCheckId"
+                        (ngModelChange)="updateModel()"
+                    />
+                </blue-field>
+            </div>
+            <blue-field
+                [label]="'committeeSetupProperties.rcmQuestions.committeeNumberLabel' | translate"
+                for="committeNumber"
+                class="m-0"
+            >
+                <select
+                    id="committeeNumber"
+                    blueSelect
+                    [(ngModel)]="committeeNumber"
+                    [attr.data-testid]="'committeeNumber'"
+                    (ngModelChange)="updateModel()"
+                >
+                    <option [ngValue]="undefined">Select</option>
+                    <option *ngFor="let committeeNumber of committeNumberOptions" [value]="committeeNumber">
+                        {{ committeeNumber }}
+                    </option>
+                </select>
+            </blue-field>
+        </div>
+        <blue-field inline>
+            <input blueCheckbox type="checkbox" id="ex-basic" value="1" />
+            <label blueFieldLabel for="ex-basic">Checkbox</label>
+        </blue-field>
+        <div class="content committee-reason-wrapper">
+            <blue-field *ngIf="showReasonTextArea" [label]="reasonLabel" class="select-reason-label" for="otherReason">
+                <textarea
+                    id="otherReason"
+                    blueTextarea
+                    [attr.data-testid]="'otherReason'"
+                    [(ngModel)]="committeeMemo.reason"
+                    (ngModelChange)="updateModelWithOtherReason()"
+                ></textarea>
+            </blue-field>
+            <blue-field
+                *ngIf="showReasonDropDown"
+                [label]="reasonLabel"
+                class="select-reason-label"
+                for="reasonDropDown"
+            >
+                <ng-container
+                    *ngIf="
+                        selectedRatingGroup === selectedRatingGroupsEnum.SovereignBond ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.SubSovereign ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.SovereignMDB ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.BankingFinanceSecurities ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.NonBanking ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.Insurance ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.CFG;
+                        else otherGrp
+                    "
+                >
+                    <blue-multiselect
+                        #dataSource
+                        id="dataSource"
+                        name="dataSource"
+                        (ngModelChange)="updateRatingCommitteeReasonsOptions($event)"
+                        (click)="handleBlurEvent(dataSource)"
+                        [options]="ratingCommitteeReasonsOptions"
+                        [(ngModel)]="committeeMemo.ratingCommitteeReasons"
+                        placeholder="Type to search..."
+                    ></blue-multiselect>
+                </ng-container>
+                <ng-template #otherGrp>
+                    <select
+                        id="reasonDropDown"
+                        [attr.data-testid]="'reasonDropDown'"
+                        blueSelect
+                        [(ngModel)]="committeeReason"
+                        (ngModelChange)="committeeReasonChange()"
+                    >
+                        <option
+                            *ngFor="
+                                let option of reasonsForGroupC(dataService.committeSupportWrapper.ratingGroupTemplate)
+                            "
+                            [value]="option"
+                        >
+                            {{ 'committeeSetupProperties.committeeReason.options.' + option | translate }}
+                        </option>
+                    </select>
+                    <span class="other-reason-label">
+                        {{ 'committeeSetupProperties.committeeReason.otherReason' | translate }}
+                    </span>
+                </ng-template>
+            </blue-field>
+            <div class="committee-info-reason">
+                <textarea
+                    blueTextarea
+                    *ngIf="committeeReason === committeeReasonType.Other"
+                    [(ngModel)]="committeeMemo.reason"
+                    (ngModelChange)="updateModelWithOtherReason()"
+                ></textarea>
+            </div>
+        </div>
+    </div>
+    <div *ngIf="!usePrimaryMethodologyRedesign">
+        <app-primary-methodology
+            [selectedPrimaryMethodologyFromList]="selectedPrimaryMethodologyFromList"
+            [prDisclosure]="prDisclosure"
+            [showPrimaryMethodologyFlag]="showPrimaryMethodologyFlag"
+            (updatePrimaryMethodologyFromList)="updatePrimaryMethodologyFromList($event)"
+            (updatePrimaryMethodologyRef)="updatePrimaryMethodologyRef($event)"
+            (updatePrDisclosure)="updatePrDisclosureMoreInfoAndArabic($event)"
+            (updateRatingMethodologyFlag)="showRatingMethodologyQuestions($event)"
+            (updateDisplayedMethodology)="updateDisplayedMethodology($event)"
+            [selectedRatingGroup]="selectedRatingGroup"
+        ></app-primary-methodology>
+    </div>
+</div>
+<app-methodology-assumption-questions
+    *ngIf="!usePrimaryMethodologyRedesign"
+    [showRatingMethodologyFlag]="showRatingMethodologyFlag"
+    [selectedPrimaryMethodologyFromList]="selectedPrimaryMethodologyCombined"
+    [primaryMethodologyRef]="primaryMethodologyRef"
+    [prDisclosure]="prDisclosure"
+    [isRatingCommitteeMemo]="true"
+></app-methodology-assumption-questions>
