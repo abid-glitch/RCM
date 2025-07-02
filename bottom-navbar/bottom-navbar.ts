@@ -44,6 +44,7 @@ import { ConflictStatus } from '@app/committee-package/shared/enums/conflict-sta
 import _ from 'lodash';
 import { RatingRecommendationSaveAndDownloadConfig } from '@app/shared/models/RatingRecommendationSaveAndDownloadConfig';
 import { DebtInformationType } from '@app/shared/models/DebtInfomation';
+import { HttpResponse } from '@angular/common/http';
 
 @Component({
     selector: 'app-bottom-navbar',
@@ -105,6 +106,10 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     currentUrl: string;
     userName: string;
 
+    get isRasDocumentRequired():boolean{
+        return this.dataService?.committeSupportWrapper?.committeeMemoSetup?.rasDocumentReq || false;
+    }
+
     constructor(
         public entityService: EntityService,
         public dataService: DataService,
@@ -145,7 +150,7 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
         this._userProfileService.userProfile$.pipe(takeUntil(this.unSubscribe$)).subscribe((data) => {
             if (data) {
-                this.userName = data.username;
+                this.userName = data.username.toLowerCase();
             }
         });
     }
@@ -174,7 +179,22 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         this.cdrRef.detectChanges();
     }
 
-    private processUpdateCase(caseStatus) {
+    onClickedRasDownload():void{
+        this.saveCurrentState()
+        this.initiateRasDownload()
+    }
+
+    private saveCurrentState():void{
+        if(this.dataService?.committeSupportWrapper?.committeeMemoSetup){}
+    }
+    private initiateRasDownload():void{
+        console.log("Ras Download ... ")
+    }
+
+    onClickedSavedButton():void{}
+
+
+    processUpdateCase(caseStatus) {
         return combineLatest([
             this.ratingRecommendationService.selectedRatingViewBy$,
             this.ratingRecommendationService.selectedRatingRecommendationEntities$,
@@ -189,27 +209,12 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     committeeSupportWrapper,
                     ratingRecommendationsTableData
                 ]) => {
-                    if (this.isCommitteeWorkflow) {
+                    if (this.isCommitteeWorkflow && this.isDownloadStage && !this.nextPage) {
                         /**
                          * @description System should not send unselected checkboxes rating classes and corresponding Debts classes to the RC memo and to the vote page
                          */
-                        if (selectedRatingRecommendationEntities.CLASS) {
-                            committeeSupportWrapper = this.removeUnselectedRatingClasses(
-                                committeeSupportWrapper,
-                                selectedRatingRecommendationEntities,
-                                ratingRecommendationsTableData
-                            );
-                        }
-
-                        if (
-                            viewBy === RatingRecommendationTableView.Debt &&
-                            selectedRatingRecommendationEntities.DEBT
-                        ) {
-                            committeeSupportWrapper = this.removeUnselectedRatingDebts(
-                                committeeSupportWrapper,
-                                selectedRatingRecommendationEntities
-                            );
-                        }
+                        this.dataService.filterEmptyRatingClasses(committeeSupportWrapper);
+                        committeeSupportWrapper = this.removeUnselectedRatingClassesAndDebts(viewBy, selectedRatingRecommendationEntities, committeeSupportWrapper, ratingRecommendationsTableData);
                     }
                     return this.casesService.updateCase(committeeSupportWrapper).pipe(
                         tap(() => {
@@ -217,9 +222,27 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                         })
                     );
                 }
-            ),
-            takeUntil(this.unSubscribe$)
+            )
         );
+    }
+
+    removeUnselectedRatingClassesAndDebts(viewBy: RatingRecommendationTableView, selectedRatingRecommendationEntities: SelectedRatingRecommendationEntities, committeeSupportWrapper: CommitteeSupport, ratingRecommendationsTableData: BlueTableData) {
+        if (viewBy === RatingRecommendationTableView.Class && selectedRatingRecommendationEntities.CLASS) {
+            committeeSupportWrapper = this.removeUnselectedRatingClasses(
+                committeeSupportWrapper,
+                selectedRatingRecommendationEntities,
+                ratingRecommendationsTableData
+            );
+        }
+
+        if (viewBy === RatingRecommendationTableView.Debt &&
+            selectedRatingRecommendationEntities.DEBT) {
+            committeeSupportWrapper = this.removeUnselectedRatingDebts(
+                committeeSupportWrapper,
+                selectedRatingRecommendationEntities
+            );
+        }
+        return committeeSupportWrapper;
     }
 
     private initFeatureFlagValues() {
@@ -330,10 +353,11 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     onClickedSaveButton(): void {
         this.isSaveAction = true;
         this.loading$.next(true);
-        if (this.currentUrl?.includes(AppRoutes.COMMITTEE_SETUP_PROPERTIES)) {
-            this.dataService.initialCommitteeSupport = _.cloneDeep(
-                this.dataService.committeSupportWrapper
-            );
+        if (
+            this.currentUrl?.includes(AppRoutes.COMMITTEE_SETUP_PROPERTIES) ||
+            this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)
+        ) {
+            this.dataService.initialCommitteeSupport = _.cloneDeep(this.dataService.committeSupportWrapper);
         }
         this.updateOrCreateNewCase(true);
     }
@@ -363,8 +387,7 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     checkIfModalIsApplicableForRatingGroup() {
         return (
             this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGCoveredBonds ||
-            this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGPrimary ||
-            this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.NonBanking
+            this.dataService.committeSupportWrapper.ratingGroupTemplate === RatingGroupType.SFGPrimary
         );
     }
 
@@ -416,7 +439,15 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
     /*Updates current case and navigates to next page  */
     updateCase(caseStatus?: CaseStatus, saveButtonClicked = false): void {
-        caseStatus = this.dataService.committeSupportWrapper.status ? this.dataService.committeSupportWrapper.status : caseStatus;
+        caseStatus = this.dataService.committeSupportWrapper.status
+            ? this.dataService.committeSupportWrapper.status
+            : caseStatus;
+        if (
+            this.currentUrl?.includes(AppRoutes.COMMITTEE_SETUP_PROPERTIES) ||
+            this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)
+        ) {
+            caseStatus = CaseStatus.Transitioned;
+        }
         this.processUpdateCase(caseStatus)
             .pipe(
                 tap(() => {
@@ -464,7 +495,10 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     this.onClickDownload(config);
                 }),
                 tap(() => {
-                    if (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) || (this.checkRatingGroup()) {
+                    if (
+                        (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) ||
+                        this.checkRatingGroupForHomePage()
+                    ) {
                         this.resetToHomePage();
                     }
                 }),
@@ -476,16 +510,20 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
             .subscribe();
     }
 
-    checkRatingGroup(){
-        return (
-            InfrastructureProjectFinance = 'PIF',
-            MSPG = 'MSPG',
-            PFG = 'PFG',
-            SFGCoveredBonds = 'SFG_COVERED_BONDS',
-            SFGPrimary = 'SFG_PRIMARY',
-            SFGRACDecisionMemo = 'SFG_RAC_DECISION_MEMO',
-            SFGSurveillance = 'SFG_SURVEILLANCE',
-        )
+    checkRatingGroupForHomePage() {
+        const currentRatingGroup = this.dataService.committeSupportWrapper.ratingGroupTemplate;
+        const ratingGroup = [
+            RatingGroupType.InfrastructureProjectFinance,
+            RatingGroupType.MSPG,
+            RatingGroupType.PFG,
+            RatingGroupType.SFGCoveredBonds,
+            RatingGroupType.SFGPrimary,
+            RatingGroupType.SFGRACDecisionMemo,
+            RatingGroupType.SFGSurveillance,
+            RatingGroupType.Insurance
+        ];
+
+        return ratingGroup.includes(currentRatingGroup);
     }
 
     /*Old Implementation For Downloading Document*/
@@ -516,15 +554,28 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         if (config) {
             const ratingRecommendationViewType =
                 config.debtInformation === DebtInformationType.instrument ? 'RATING_CLASS_AND_DEBTS' : 'RATING_CLASS';
+
+            const downloadDocs$: Observable<HttpResponse<Blob>>[] = [];
             if (config.actionRequestForm) {
-                this.generationService.generateArfDocument(RatingTemplate.Arf, ratingRecommendationViewType);
+                downloadDocs$.push(
+                    this.generationService.generateArfDocument(RatingTemplate.Arf, ratingRecommendationViewType, false)
+                );
             }
             if (config.rcmCoverPage) {
-                this.generationService.generateRCMCoverPagePdfDocument(ratingRecommendationViewType);
+                downloadDocs$.push(
+                    this.generationService.generateRCMCoverPagePdfDocument(ratingRecommendationViewType, false)
+                );
             }
             if (config.rcmAnalytical) {
-                this.generationService.generateRcmDocument(RatingTemplate.Rcm, ratingRecommendationViewType);
+                downloadDocs$.push(
+                    this.generationService.generateRcmDocument(RatingTemplate.Rcm, ratingRecommendationViewType, false)
+                );
             }
+            combineLatest(downloadDocs$)
+                .pipe(first())
+                .subscribe(() => {
+                    this.generationService.downloadComplete$.next();
+                });
         } else {
             // Default when we dont show Save & Download Dialog
             if (this.isRatingRecommendation) {
@@ -547,11 +598,9 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     }
 
     navigateInviteePage(): void {
-        this.casesService.router.navigate([
-            AppRoutes.CASE,
-            this.dataService.committeSupportWrapper.id,
-            AppRoutes.RC_INVITEES
-        ]);
+        const caseid = this.dataService.committeSupportWrapper.id;
+        this.clearFormDataAndNavigate();
+        this.casesService.router.navigate([AppRoutes.CASE, caseid, AppRoutes.RC_INVITEES]);
     }
 
     /*Manages back navigation and emit continue event*/
@@ -606,11 +655,11 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     });
                 });
             }
-            if (entity.outlook) {
+            if (entity?.outlook) {
                 const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
-                    (el) => el.data.identifier === entity.outlook.identifier && el.data.immediateParent.id === entity.id
+                    (el) => el?.data?.identifier === entity?.outlook?.identifier && el?.data?.immediateParent?.id === entity?.id
                 );
-                if (!blueTableData && !!entity.outlook.proposedOutlook) {
+                if (!blueTableData && !!entity?.outlook?.proposedOutlook) {
                     entity.outlook.proposedOutlook = undefined;
                 }
             }
@@ -653,11 +702,11 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     });
                 });
             }
-            if (entity.outlook) {
+            if (entity?.outlook) {
                 const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
-                    (el) => el.data.identifier === entity.outlook.identifier && el.data.immediateParent.id === entity.id
+                    (el) => el?.data?.identifier === entity?.outlook?.identifier && el?.data?.immediateParent?.id === entity?.id
                 );
-                if (!blueTableData && !!entity.outlook.proposedOutlook) {
+                if (!blueTableData && !!entity?.outlook?.proposedOutlook) {
                     entity.outlook.proposedOutlook = undefined;
                 }
             }
