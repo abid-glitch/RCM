@@ -15,23 +15,42 @@
         <div class="sticky-bar-end">
             <ng-container *ngTemplateOutlet="cancelButton"></ng-container>
             <ng-container *ngTemplateOutlet="saveButton"></ng-container>
-            <ng-container *ngTemplateOutlet="arfButton"></ng-container>
             <ng-container *ngTemplateOutlet="continueButton"></ng-container>
         </div>
     </blue-sticky-bar>
 
     <ng-template #saveButton>
+                <button
+            *ngIf="
+                userProfile.roleReadWrite &&
+                !isFinalized &&
+                isRatingRecommendation &&
+                (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) && isRasDocumentRequired
+            "
+            id="rasDownloadBtn"
+            [attr.data-testid]="'rasDownloadBtn'"
+            class="button button-secondary"
+            (click)="this.onClickedRasDownload()"
+            [disabled]="
+                (loading$ | async) ||
+                (isEntitySelectionSection && !sectionIsValid) ||
+                !entityService.selectedOrgTobeImpacted.length
+            "
+        >
+            {{ 'navigationControl.rasDownloadLabel' | translate }}
+        </button>
+
         <button
             *ngIf="
                 userProfile.roleReadWrite &&
                 !isFinalized &&
-                this.isRatingRecommendation &&
+                isRatingRecommendation &&
                 (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection)
             "
             id="saveBtn"
             [attr.data-testid]="'saveBtn'"
             class="button button-secondary"
-            (click)="this.onClickedSaveButton()"
+            (click)="onClickedSaveButton()"
             [disabled]="
                 (loading$ | async) ||
                 (isEntitySelectionSection && !sectionIsValid) ||
@@ -59,28 +78,6 @@
             {{ 'navigationControl.cancelLabel' | translate }}
         </button>
     </ng-template>
-
-    <ng-template #arfButton>
-        <button
-            *ngIf="
-                userProfile.roleReadWrite &&
-                isCommitteeWorkflow &&
-                isArfDownload &&
-                !isArfOnly &&
-                isDownloadStage &&
-                !isFinalized
-            "
-            id="'arfDownload'"
-            [attr.data-testid]="'arfDownload'"
-            class="button"
-            (click)="handleArfDownload()"
-            [disabled]="
-                isDownloadStage && (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)
-            "
-        >
-            {{ 'navigationControl.arfDownload' | translate }}
-        </button>
-    </ng-template>
     <ng-template #continueButton>
         <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtn">
             <button
@@ -90,7 +87,9 @@
                 [disabled]="
                     !sectionIsValid ||
                     (loading$ | async) ||
-                    (isDownloadStage && (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton))
+                    (isDownloadStage &&
+                        (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)) ||
+                    !isSaveEnabled
                 "
                 (click)="confirmContinueSelection()"
             >
@@ -106,10 +105,7 @@
         </ng-container>
         <ng-template #continueBtn>
             <button
-                *ngIf="
-                    !isDownloadStage ||
-                    (isDownloadStage && !this.isArfOnly && isCommitteeWorkflow && isRatingCommitteeWorkflow)
-                "
+                *ngIf="!isDownloadStage || (isDownloadStage && isCommitteeWorkflow && isRatingCommitteeWorkflow)"
                 id="{{ navMetaData?.nextButton?.buttonId }}-continue"
                 [attr.data-testid]="navMetaData?.nextButton?.buttonId + '-continue'"
                 class="button"
