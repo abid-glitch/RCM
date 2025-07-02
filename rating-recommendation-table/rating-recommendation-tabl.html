@@ -5,21 +5,74 @@
         [enableActionButton]="enableActionButton$ | async"
         (changeViewTableBy)="updateViewTableBy($event)"
         (dispatchBulkAction)="onBulkActionDispatched($event)"
+        [ratingClassHidden]="hideCustomRatingClassButton$ | async"
+        [enableRatingClassButton]="enableCustomRatingClassButton$ | async"
+        (addRatingClass)="addRatingClass()"
     ></app-rating-recommendation-header>
     <div class="mt-3 rating-table-container" id="table-content">
         <ng-container *ngIf="ratingRecommendation$ | async as ratingRecommendation">
-            <app-recommendation-table
-                (selectedEntityChanged)="onSelectedRatingEntity($event)"
-                (recommendationChange)="onRecommendationChange($event)"
-                (updatedRatingRecommendation)="onUpdatedRatingRecommendation($event)"
-                [isFigBanking]="isFigBanking$ | async"
-                [selectedTableView]="tableView"
-                [ratingRecommendation]="ratingRecommendation"
-                [recommendationsDropdownOptionMapping]="recommendationsDropdownOptionMapping$ | async"
-                [continueClicked]="continueClicked$ | async"
-                [isCommitteeWorkflow]="isCommitteeWorkflow"
-            ></app-recommendation-table>
+            <ng-container *ngIf="ratingsMetadataLookup$ | async as ratingsMetadataLookup">
+                <app-recommendation-table
+                    [ratingsMetadataLookup]="ratingsMetadataLookup"
+                    (selectedEntityChanged)="onSelectedRatingEntity($event)"
+                    (recommendationChange)="onRecommendationChange($event)"
+                    (updatedRatingRecommendation)="onUpdatedRatingRecommendation($event)"
+                    [isFigBanking]="isFigBanking$ | async"
+                    [selectedTableView]="tableView"
+                    [ratingRecommendation]="ratingRecommendation"
+                    [recommendationsDropdownOptionMapping]="recommendationsDropdownOptionMapping$ | async"
+                    [continueClicked]="continueClicked$ | async"
+                    (ratingClassRemoved)="onRatingClassRemoved($event)"
+                    (ratingClassChanged)="onRatingClassChanged($event)"
+                    [customRatingClasses]="customRatingClasses$ | async"
+                    [customRatingClassesState]="customRatingClassesState$ | async"
+                    [isCommitteeWorkflow]="isCommitteeWorkflow"
+                ></app-recommendation-table>
+            </ng-container>
         </ng-container>
+        <div class="country-ceiling">
+            <div class="country-ceiling-title">
+                {{ 'ratingRecommendation.countryCeilings.title' | translate }}
+            </div>
+            <div class="country-ceiling-item">
+                <div class="country-ceiling-item-country">{{ countryCode | translate }}</div>
+                <div class="country-ceiling-item-table">
+                    <blue-table [data]="countryCeilings">
+                        <ng-template blueTemplate="header">
+                            <tr blueTableHeaderRow sticky>
+                                <td blueTableHeaderCell>
+                                    {{
+                                        'ratingRecommendation.countryCeilings.localCurrencySovereignRating' | translate
+                                    }}
+                                </td>
+                                <td blueTableHeaderCell>
+                                    {{
+                                        'ratingRecommendation.countryCeilings.foreignCurrencySovereignRating'
+                                            | translate
+                                    }}
+                                </td>
+                                <td blueTableHeaderCell>
+                                    {{ 'ratingRecommendation.countryCeilings.localCurrencyCountryCeiling' | translate }}
+                                </td>
+                                <td blueTableHeaderCell>
+                                    {{
+                                        'ratingRecommendation.countryCeilings.foreignCurrencyCountryCeiling' | translate
+                                    }}
+                                </td>
+                            </tr>
+                        </ng-template>
+                        <ng-template blueTemplate="body" let-row="row">
+                            <tr blueTableRow [blueTableRow]="row">
+                                <td blueTableCell>{{ row.data.localSovereignRating }}</td>
+                                <td blueTableCell>{{ row.data.foreignSovereignRating }}</td>
+                                <td blueTableCell>{{ row.data.localCountryCeiling }}</td>
+                                <td blueTableCell>{{ row.data.foreignCountryCeiling }}</td>
+                            </tr>
+                        </ng-template>
+                    </blue-table>
+                </div>
+            </div>
+        </div>
     </div>
 </ng-container>
 <app-bottom-navbar
@@ -38,7 +91,10 @@
     [isDownloadStage]="true"
     [isRatingsTableValid]="isRatingsTableValid$ | async"
     [enableActionButton]="enableActionButton$ | async"
+    (backClickedEventEmitter)="navBackToActionSetupProperties()"
+    #bottomNavBar
 ></app-bottom-navbar>
+
 <ng-container *ngIf="isLoading$ | async"></ng-container>
 <ng-container *ngIf="warningAndSuccessAlert$ | async"></ng-container>
 <ng-container *ngIf="manageRatingsSyncDirection$ | async"></ng-container>
