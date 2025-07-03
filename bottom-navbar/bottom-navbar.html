@@ -15,31 +15,11 @@
         <div class="sticky-bar-end">
             <ng-container *ngTemplateOutlet="cancelButton"></ng-container>
             <ng-container *ngTemplateOutlet="saveButton"></ng-container>
-            <ng-container *ngTemplateOutlet="continueButton"></ng-container>
+            <ng-container *ngTemplateOutlet="continueBtn"></ng-container>
         </div>
     </blue-sticky-bar>
 
     <ng-template #saveButton>
-                <button
-            *ngIf="
-                userProfile.roleReadWrite &&
-                !isFinalized &&
-                isRatingRecommendation &&
-                (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) && isRasDocumentRequired
-            "
-            id="rasDownloadBtn"
-            [attr.data-testid]="'rasDownloadBtn'"
-            class="button button-secondary"
-            (click)="this.onClickedRasDownload()"
-            [disabled]="
-                (loading$ | async) ||
-                (isEntitySelectionSection && !sectionIsValid) ||
-                !entityService.selectedOrgTobeImpacted.length
-            "
-        >
-            {{ 'navigationControl.rasDownloadLabel' | translate }}
-        </button>
-
         <button
             *ngIf="
                 userProfile.roleReadWrite &&
@@ -78,7 +58,8 @@
             {{ 'navigationControl.cancelLabel' | translate }}
         </button>
     </ng-template>
-    <ng-template #continueButton>
+    
+    <ng-template #continueBtn>
         <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtn">
             <button
                 id="{{ navMetaData?.nextButton?.buttonId }}"
@@ -91,15 +72,10 @@
                         (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)) ||
                     !isSaveEnabled
                 "
-                (click)="confirmContinueSelection()"
+                (click)="isRasDocumentRequired && isRatingRecommendation && (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) && !isDownloadStage ? onClickedRasDownload() : confirmContinueSelection()"
             >
                 {{
-                    (isRatingRecommendation &&
-                    (!!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection) &&
-                    !isDownloadStage
-                        ? 'navigationControl.saveAndContinue'
-                        : navMetaData?.nextButton?.buttonLabel
-                    ) | translate
+                    getButtonText()
                 }}
             </button>
         </ng-container>
