@@ -204,6 +204,27 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         console.log("Ras Download ... ")
     }
 
+    getButtonText(): string {
+    // Only show RAS DOWNLOAD text when specifically on rating-recommendation page
+    // and RAS document is required and not in download stage
+    if (this.isRatingRecommendation && 
+        this.isRasDocumentRequired && 
+        (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
+        !this.isDownloadStage) {
+        return this.translateService.instant('navigationControl.rasDownloadLabel');
+    }
+    
+    // Show SAVE & CONTINUE when on rating-recommendation page but RAS not required
+    if (this.isRatingRecommendation &&
+        (!!this.entityService.selectedOrgTobeImpacted.length || this.isEntitySelectionSection) &&
+        !this.isDownloadStage) {
+        return this.translateService.instant('navigationControl.saveAndContinue');
+    }
+    
+    // Default button text for other pages
+    return this.translateService.instant(this.navMetaData?.nextButton?.buttonLabel || 'navigationControl.continueLabel');
+}
+
     onClickedSavedButton():void{}
 
 
