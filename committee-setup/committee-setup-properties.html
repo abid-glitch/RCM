@@ -1,101 +1,160 @@
-<ng-container *ngIf="userProfile$ | async as userProfile">
-    <blue-sticky-bar class="sticky-bar-bottom sticky-bar sticky-bar-offset" [class.z-20]="isEntitySelectionSection">
-        <ng-container *ngIf="prevPage">
-            <div class="sticky-bar-start" (click)="navBack()" (keydown)="navBack()" tabindex="0">
-                <button
-                    class="button button-secondary"
-                    id="{{ navMetaData?.prevButton?.buttonId }}"
-                    [attr.data-testid]="navMetaData?.prevButton?.buttonId"
-                >
-                    {{ navMetaData?.prevButton?.buttonLabel | translate }}
-                </button>
-            </div>
-        </ng-container>
+<!-- CODE_DEBT: Consider breaking into multiple modules  -->
 
-        <div class="sticky-bar-end">
-            <ng-container *ngTemplateOutlet="cancelButton"></ng-container>
-            <ng-container *ngTemplateOutlet="saveButton"></ng-container>
-            <ng-container *ngTemplateOutlet="continueButton"></ng-container>
+<div class="main-container">
+    <div *ngIf="!isCamsIDValid" class="text-red-500">
+        <svg blueIcon="alert-octagon" class="alert-icon"></svg>
+        {{ 'committeeSetupProperties.camsIDErrorMessage' | translate }}
+    </div>
+    <div class="rcm-header-inputs">
+        <div class = "ras-checkbox">
+            <input 
+            blueCheckbox type="checkbox" id="ex-basic" value="1" 
+            (ngModelChange)="updateModel()"
+            
+            />
+            <label blueFieldLabel for="ex-basic">
+                {{ 'committeeSetupProperties.rcmQuestions.ratingAssessmentService' | translate }}
+            </label>
         </div>
-    </blue-sticky-bar>
-
-    <ng-template #saveButton>
-        <button
-            *ngIf="
-                userProfile.roleReadWrite &&
-                !isFinalized &&
-                isRatingRecommendation &&
-                (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection)
-            "
-            id="saveBtn"
-            [attr.data-testid]="'saveBtn'"
-            class="button button-secondary"
-            (click)="onClickedSaveButton()"
-            [disabled]="
-                (loading$ | async) ||
-                (isEntitySelectionSection && !sectionIsValid) ||
-                !entityService.selectedOrgTobeImpacted.length
-            "
-        >
-            {{ 'navigationControl.saveLabel' | translate }}
-        </button>
-    </ng-template>
-
-    <ng-template #cancelButton>
-        <button
-            *ngIf="
-                userProfile.roleReadWrite &&
-                !isFinalized &&
-                (this.isRatingRecommendation
-                    ? !!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection
-                    : prevPage)
-            "
-            id="cancelBtn"
-            [attr.data-testid]="'cancelBtn'"
-            class="button button-secondary bg-transparent border-0 shadow-none"
-            (click)="confirmCancelSelection()"
-        >
-            {{ 'navigationControl.cancelLabel' | translate }}
-        </button>
-    </ng-template>
-    
-    <ng-template #continueButton>
-        <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtn">
-            <button
-                id="{{ navMetaData?.nextButton?.buttonId }}"
-                [attr.data-testid]="navMetaData?.nextButton?.buttonId"
-                class="button"
-                [disabled]="
-                    !sectionIsValid ||
-                    (loading$ | async) ||
-                    (isDownloadStage &&
-                        (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)) ||
-                    !isSaveEnabled
-                "
-                (click)="isRasDocumentRequired && isRatingRecommendation && (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) && !isDownloadStage ? onClickedRasDownload() : confirmContinueSelection()"
+        <app-shared-date-picker
+            [label]="'actionSetupProperties.initialQuestions.expectedRatingCommitteeTitle' | translate"
+            [minDate]="minDate"
+            [maxDate]="maxDate"
+            (dateChanged)="updateModel()"
+            [(ratingDate)]="ratingComitteeDate"
+        ></app-shared-date-picker>
+        <div class="content committee-info">
+            <div class="cams">
+                <span
+                    class="cams-label leading-10 field-label"
+                    [ngClass]="{
+                        'text-red-500': !isCamsIDValid
+                    }"
+                >
+                    {{ 'committeeSetupProperties.rcmQuestions.conflictAndAttestationMgmnt' | translate }}&nbsp; &nbsp;{{
+                        'committeeSetupProperties.rcmQuestions.numericOnly' | translate
+                    }}
+                </span>
+                <blue-field class="-p-1" for="camsId">
+                    <input
+                        id="camsId"
+                        [attr.data-testid]="'camsId'"
+                        [numbersOnly]="true"
+                        blueInput
+                        [(ngModel)]="committeeMemo.conflictCheckId"
+                        (ngModelChange)="updateModel()"
+                    />
+                </blue-field>
+            </div>
+            <blue-field
+                [label]="'committeeSetupProperties.rcmQuestions.committeeNumberLabel' | translate"
+                for="committeNumber"
+                class="m-0"
             >
-                {{
-                    (isRasDocumentRequired && isRatingRecommendation && (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) && !isDownloadStage
-                        ? 'navigationControl.rasDownloadLabel'
-                        : (isRatingRecommendation &&
-                          (!!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection) &&
-                          !isDownloadStage
-                            ? 'navigationControl.saveAndContinue'
-                            : navMetaData?.nextButton?.buttonLabel)
-                    ) | translate
-                }}
-            </button>
-        </ng-container>
-        <ng-template #continueBtn>
-            <button
-                *ngIf="!isDownloadStage || (isDownloadStage && isCommitteeWorkflow && isRatingCommitteeWorkflow)"
-                id="{{ navMetaData?.nextButton?.buttonId }}-continue"
-                [attr.data-testid]="navMetaData?.nextButton?.buttonId + '-continue'"
-                class="button"
-                (click)="confirmContinueSelection(false)"
+                <select
+                    id="committeeNumber"
+                    blueSelect
+                    [(ngModel)]="committeeNumber"
+                    [attr.data-testid]="'committeeNumber'"
+                    (ngModelChange)="updateModel()"
+                >
+                    <option [ngValue]="undefined">Select</option>
+                    <option *ngFor="let committeeNumber of committeNumberOptions" [value]="committeeNumber">
+                        {{ committeeNumber }}
+                    </option>
+                </select>
+            </blue-field>
+        </div>
+        <div class="content committee-reason-wrapper">
+            <blue-field *ngIf="showReasonTextArea" [label]="reasonLabel" class="select-reason-label" for="otherReason">
+                <textarea
+                    id="otherReason"
+                    blueTextarea
+                    [attr.data-testid]="'otherReason'"
+                    [(ngModel)]="committeeMemo.reason"
+                    (ngModelChange)="updateModelWithOtherReason()"
+                ></textarea>
+            </blue-field>
+            <blue-field
+                *ngIf="showReasonDropDown"
+                [label]="reasonLabel"
+                class="select-reason-label"
+                for="reasonDropDown"
             >
-                {{ 'navigationControl.continueLabel' | translate }}
-            </button>
-        </ng-template>
-    </ng-template>
-</ng-container>
+                <ng-container
+                    *ngIf="
+                        selectedRatingGroup === selectedRatingGroupsEnum.SovereignBond ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.SubSovereign ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.SovereignMDB ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.BankingFinanceSecurities ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.NonBanking ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.Insurance ||
+                            selectedRatingGroup === selectedRatingGroupsEnum.CFG
+                        else otherGrp
+                    "
+                >
+                    <blue-multiselect
+                        #dataSource
+                        id="dataSource"
+                        name="dataSource"
+                        (ngModelChange)="updateRatingCommitteeReasonsOptions($event)"
+                        (click)="handleBlurEvent(dataSource)"
+                        [options]="ratingCommitteeReasonsOptions"
+                        [(ngModel)]="committeeMemo.ratingCommitteeReasons"
+                        placeholder="Type to search..."
+                    ></blue-multiselect>
+                </ng-container>
+                <ng-template #otherGrp>
+                    <select
+                        id="reasonDropDown"
+                        [attr.data-testid]="'reasonDropDown'"
+                        blueSelect
+                        [(ngModel)]="committeeReason"
+                        (ngModelChange)="committeeReasonChange()"
+                    >
+                        <option
+                            *ngFor="
+                                let option of reasonsForGroupC(dataService.committeSupportWrapper.ratingGroupTemplate)
+                            "
+                            [value]="option"
+                        >
+                            {{ 'committeeSetupProperties.committeeReason.options.' + option | translate }}
+                        </option>
+                    </select>
+                    <span class="other-reason-label">
+                        {{ 'committeeSetupProperties.committeeReason.otherReason' | translate }}
+                    </span>
+                </ng-template>
+            </blue-field>
+            <div class="committee-info-reason">
+                <textarea
+                    blueTextarea
+                    *ngIf="committeeReason === committeeReasonType.Other"
+                    [(ngModel)]="committeeMemo.reason"
+                    (ngModelChange)="updateModelWithOtherReason()"
+                ></textarea>
+            </div>
+        </div>
+    </div>
+    <div *ngIf="!usePrimaryMethodologyRedesign">
+        <app-primary-methodology
+            [selectedPrimaryMethodologyFromList]="selectedPrimaryMethodologyFromList"
+            [prDisclosure]="prDisclosure"
+            [showPrimaryMethodologyFlag]="showPrimaryMethodologyFlag"
+            (updatePrimaryMethodologyFromList)="updatePrimaryMethodologyFromList($event)"
+            (updatePrimaryMethodologyRef)="updatePrimaryMethodologyRef($event)"
+            (updatePrDisclosure)="updatePrDisclosureMoreInfoAndArabic($event)"
+            (updateRatingMethodologyFlag)="showRatingMethodologyQuestions($event)"
+            (updateDisplayedMethodology)="updateDisplayedMethodology($event)"
+            [selectedRatingGroup]="selectedRatingGroup"
+        ></app-primary-methodology>
+    </div>
+</div>
+<app-methodology-assumption-questions
+    *ngIf="!usePrimaryMethodologyRedesign"
+    [showRatingMethodologyFlag]="showRatingMethodologyFlag"
+    [selectedPrimaryMethodologyFromList]="selectedPrimaryMethodologyCombined"
+    [primaryMethodologyRef]="primaryMethodologyRef"
+    [prDisclosure]="prDisclosure"
+    [isRatingCommitteeMemo]="true"
+></app-methodology-assumption-questions>
