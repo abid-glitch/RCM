@@ -175,69 +175,20 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         this.cdrRef.detectChanges();
     }
 
-    // NEW: Getter for RAS document requirement
+    // Simple getter for RAS document requirement
     get isRasDocumentRequired(): boolean {
         return this.dataService?.committeSupportWrapper?.committeeMemoSetup?.rasDocumentReq || false;
     }
 
-    // NEW: Check if RAS download should be shown
-    shouldShowRasDownload(): boolean {
-        const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation');
-        const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties');
-        
-        return isOnRatingRecommendationPage && 
-               !isOnSetupPage &&
-               this.isRasDocumentRequired && 
-               this.isRatingRecommendation && 
-               (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
-               !this.isDownloadStage;
-    }
-
-    // NEW: Get button text with RAS download logic
-    getButtonText(): string {
-        // Check if we should show RAS download
-        if (this.shouldShowRasDownload()) {
-            return this.translateService.instant('navigationControl.rasDownloadLabel');
-        }
-
-        // Preserve original logic for other cases
-        return this.translateService.instant(
-            (this.isRatingRecommendation &&
-            (!!this.entityService.selectedOrgTobeImpacted.length || this.isEntitySelectionSection) &&
-            !this.isDownloadStage
-                ? 'navigationControl.saveAndContinue'
-                : this.navMetaData?.nextButton?.buttonLabel
-            )
-        );
-    }
-
-    // NEW: Handle RAS download click
+    // Simple method to handle RAS download click
     onClickedRasDownload(): void {
-        if (this.shouldShowRasDownload()) {
-            this.saveCurrentState();
-            this.initiateRasDownload();
+        if (this.isRasDocumentRequired) {
+            this.saveCurrentWorkProgress();
+            // Add your RAS download logic here
+            console.log("Initiating RAS download...");
         } else {
             this.confirmContinueSelection();
         }
-    }
-
-    // NEW: Save current state before RAS download
-    private saveCurrentState(): void {
-        if (this.dataService?.committeSupportWrapper?.committeeMemoSetup) {
-            this.isSaveAction = true;
-            this.loading$.next(true);
-
-            if (this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)) {
-                this.dataService.initialCommitteeSupport = _.cloneDeep(this.dataService.committeSupportWrapper);
-            }
-            this.updateOrCreateNewCase(true);
-        }
-    }
-
-    // NEW: Initiate RAS download
-    private initiateRasDownload(): void {
-        console.log("RAS Download initiated...");
-        // Add your RAS download logic here
     }
 
     processUpdateCase(caseStatus) {
