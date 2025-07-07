@@ -72,9 +72,18 @@
                         (((continueClicked$ | async) && !isRatingsTableValid) || !enableActionButton)) ||
                     !isSaveEnabled
                 "
-                (click)="shouldShowRasDownload() ? onClickedRasDownload() : confirmContinueSelection()"
+                (click)="isRasDocumentRequired && isRatingRecommendation && !isDownloadStage && (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection) ? onClickedRasDownload() : confirmContinueSelection()"
             >
-                {{ getButtonText() }}
+                {{
+                    (isRasDocumentRequired && isRatingRecommendation && !isDownloadStage && (!!entityService.selectedOrgTobeImpacted?.length || isEntitySelectionSection)) 
+                        ? ('navigationControl.rasDownloadLabel' | translate)
+                        : (isRatingRecommendation &&
+                            (!!entityService.selectedOrgTobeImpacted.length || isEntitySelectionSection) &&
+                            !isDownloadStage
+                                ? 'navigationControl.saveAndContinue'
+                                : navMetaData?.nextButton?.buttonLabel
+                            ) | translate
+                }}
             </button>
         </ng-container>
         <ng-template #continueBtn>
