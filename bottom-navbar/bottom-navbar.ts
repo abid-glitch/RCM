@@ -39,7 +39,7 @@ import { CommitteeSupport } from '@app/shared/models/CommitteeSupport';
 import { Rating, SelectedRatingRecommendationEntities } from '@app/features/rating-recommendation';
 import { CommitteeParticipantService } from '@app/participants/repository/services/committee-participant.service';
 import { Invitees } from '@app/participants/models/invitees';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
 import { ConflictStatus } from '@app/committee-package/shared/enums/conflict-status';
 import _ from 'lodash';
 import { RatingRecommendationSaveAndDownloadConfig } from '@app/shared/models/RatingRecommendationSaveAndDownloadConfig';
@@ -139,6 +139,13 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
         this.userProfile$ = this.userProfileService.userProfile$;
 
+        this.router.events.pipe(
+            filter(event => event instanceof NavigationEnd), takeUntil(this.unSubscribe$)).subscribe((event : NavigationEnd)=>{
+            this.currentUrl=event.url
+            console.log("URL updated to : ", this.currentUrl)
+        
+        })
+
         this.dataService
             .getIsSaveClicked()
             .pipe(takeUntil(this.unSubscribe$))
@@ -205,25 +212,36 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     }
 
     getButtonText(): string {
+        console.log("getButtonText called, currenturl : ", this.currentUrl)
+        console.log("isRasDocumentRequired : ", this.isRasDocumentRequired)
+        console.log("isRatingRecommendation : ", this.isRatingRecommendation)
+        console.log("isDownloadStage : ", this.isDownloadStage)
     // Only show RAS DOWNLOAD text when specifically on rating-recommendation page
     // and RAS document is required and not in download stage
     const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation')
     const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties')
+    const isOnComponentSelectionPage = this.currentUrl?.includes('component-selection-setup')
+    console.log("isOnRatingRecommendationPage : ", isOnRatingRecommendationPage)
+    console.log("isOnSetupPage : ", isOnSetupPage)
+    console.log("isOnComponentSelectionPage : ", isOnComponentSelectionPage)
     if (isOnRatingRecommendationPage && 
         !isOnSetupPage && this.isRasDocumentRequired && this.isRatingRecommendation && 
         (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
         !this.isDownloadStage) {
+            console.log("Returning RAS Download")
         return this.translateService.instant('navigationControl.rasDownloadLabel');
     }
     
     // Show SAVE & CONTINUE when on rating-recommendation page but RAS not required
-    if (isOnRatingRecommendationPage && !isOnSetupPage && this.isRatingRecommendation &&
-        (!!this.entityService.selectedOrgTobeImpacted.length || this.isEntitySelectionSection) &&
-        !this.isDownloadStage) {
+    if (this.isRatingRecommendation && !this.isDownloadStage){ 
+        console.log("Returning Save and Continue")
+        console.log("selectedOrgTobeImpacted : ", this.entityService.selectedOrgTobeImpacted?.length)
+        console.log("isEnitySelectionSection  :", this.isEntitySelectionSection)
         return this.translateService.instant('navigationControl.saveAndContinue');
     }
     
     // Default button text for other pages
+    console.log("Returning default button text")
     return this.translateService.instant(this.navMetaData?.nextButton?.buttonLabel || 'navigationControl.continueLabel');
 }
 
