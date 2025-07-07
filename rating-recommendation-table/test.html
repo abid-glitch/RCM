@@ -60,7 +60,7 @@
     </ng-template>
     
     <ng-template #continueButton>
-        <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtnReadOnly">
+        <ng-container *ngIf="userProfile.roleReadWrite && !isFinalized; else continueBtn">
             <button
                 id="{{ navMetaData?.nextButton?.buttonId }}"
                 [attr.data-testid]="navMetaData?.nextButton?.buttonId"
@@ -77,7 +77,7 @@
                 {{ getButtonText() }}
             </button>
         </ng-container>
-        <ng-template #continueBtnReadOnly>
+        <ng-template #continueBtn>
             <button
                 *ngIf="!isDownloadStage || (isDownloadStage && isCommitteeWorkflow && isRatingCommitteeWorkflow)"
                 id="{{ navMetaData?.nextButton?.buttonId }}-continue"
