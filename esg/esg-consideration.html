@@ -1,0 +1,85 @@
+<div class="esg">
+    <div class="esg-header">
+        <label class="esg-header-title">
+            {{ 'actionSetupProperties.esgConsideration.title' | translate }}
+        </label>
+    </div>
+    <div class="esg-content">
+        <div class="esg-content-question">
+            {{ 'actionSetupProperties.esgConsideration.recommendation.question' | translate }}
+        </div>
+        <div class="esg-content-choice">
+            <blue-button-toggle [(ngModel)]="isESGRecommended" id="esgChoice" (ngModelChange)="resetSelectedFactors()">
+                <button
+                    blueButtonToggleItem
+                    [attr.data-testid]="'esgChoice' + '_' + yesNoUnknownOptions.No"
+                    [value]="yesNoUnknownOptions.No"
+                >
+                    {{ 'yesNoOptions.NO' | translate }}
+                </button>
+                <button
+                    blueButtonToggleItem
+                    [attr.data-testid]="'esgChoice' + '_' + yesNoUnknownOptions.Yes"
+                    [value]="yesNoUnknownOptions.Yes"
+                >
+                    {{ 'yesNoOptions.YES' | translate }}
+                </button>
+            </blue-button-toggle>
+        </div>
+    </div>
+    <div class="esg-content" *ngIf="isESGRecommended === yesNoUnknownOptions.Yes">
+        <div class="esg-content-multi-choice-question">
+            {{ 'actionSetupProperties.esgConsideration.recommendation.yesQuestion' | translate }}
+        </div>
+        <div class="esg-content-multi-choice">
+            <div class="field field-inline w-auto flex-none">
+                <div class="field-control">
+                    <input
+                        blueCheckbox
+                        id="environmentOption"
+                        type="checkbox"
+                        [attr.data-testid]="esgFactors.Environmental"
+                        [checked]="selectedFactors?.has(esgFactors.Environmental)"
+                        [value]="esgFactors.Environmental"
+                        (change)="onFactorChange($event)"
+                    />
+                </div>
+                <label class="field-label adjust-padding" for="environmentOption">
+                    {{ 'actionSetupProperties.esgConsideration.factors.environmental' | translate }}
+                </label>
+            </div>
+            <div class="field field-inline w-auto flex-none">
+                <div class="field-control">
+                    <input
+                        blueCheckbox
+                        id="socialOption"
+                        type="checkbox"
+                        [attr.data-testid]="esgFactors.Social"
+                        [checked]="selectedFactors?.has(esgFactors.Social)"
+                        [value]="esgFactors.Social"
+                        (change)="onFactorChange($event)"
+                    />
+                </div>
+                <label class="field-label adjust-padding" for="socialOption">
+                    {{ 'actionSetupProperties.esgConsideration.factors.social' | translate }}
+                </label>
+            </div>
+            <div class="field field-inline w-auto flex-none">
+                <div class="field-control">
+                    <input
+                        blueCheckbox
+                        id="governanceChoice"
+                        type="checkbox"
+                        [attr.data-testid]="esgFactors.Governance"
+                        [checked]="selectedFactors?.has(esgFactors.Governance)"
+                        [value]="esgFactors.Governance"
+                        (change)="onFactorChange($event)"
+                    />
+                </div>
+                <label class="field-label adjust-padding" for="governanceChoice">
+                    {{ 'actionSetupProperties.esgConsideration.factors.governance' | translate }}
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
