@@ -1,0 +1,94 @@
+<div class="page-title">
+    <label class="action-setup-title-label">{{ 'actionSetupProperties.initialQuestions.title' | translate }}</label>
+    <svg
+        blueIcon="info"
+        bluePopoverAnchor
+        [popover]="message"
+        popoverEvent="mouseenter"
+        class="button-link info-tooltip-icon"
+    ></svg>
+    <blue-popover #message class="blue-popover">
+        <div class="blue-popover-label">
+            {{ 'actionSetupProperties.initialQuestions.titleTooltipText' | translate }}
+        </div>
+    </blue-popover>
+</div>
+
+<div class="expected-rating-committee-date-field">
+    <app-shared-date-picker
+        [label]="'actionSetupProperties.initialQuestions.expectedRatingCommitteeTitle' | translate"
+        [minDate]="minDate"
+        [maxDate]="maxDate"
+        (dateChanged)="updateDate()"
+        [placement]="placement"
+        [(ratingDate)]="ratingComitteeDate"
+        [showToolTip]="showRatingCommitteeDateToolTip"
+    ></app-shared-date-picker>
+
+    <app-shared-date-picker
+        *ngIf="showClosingDate"
+        [label]="'actionSetupProperties.initialQuestions.closingDateTitle' | translate"
+        [minDate]="minDate"
+        [maxDate]="maxDate"
+        (dateChanged)="updateClosingDate()"
+        [(ratingDate)]="closingDate"
+    ></app-shared-date-picker>
+</div>
+
+<app-initial-questions
+    (sectionIsValid)="initialQuestionValidityStatus = $event"
+    [showSovDefaultResponse]="defaultInitialQuestionForSovSubject.asObservable()"
+></app-initial-questions>
+
+<app-pr-disclosure
+    (prDisclosureSectionIsValid)="allPrRequiredFieldValidationsPass = $event; updateTemplate()"
+    [showSovDefaultResponse]="defaultInitialQuestionForSovSubject.asObservable()"
+    [usePrimaryMethodologyRedesign]="showMethodologyRedesignedComponent"
+></app-pr-disclosure>
+<app-esg-considerations></app-esg-considerations>
+
+<app-asset-specific-fields *ngIf="showAssetSpecificFields" #assetSpecificFields></app-asset-specific-fields>
+
+<app-regulatory-disclosures
+    [showSovDefaultResponse]="defaultInitialQuestionForSovSubject.asObservable()"
+></app-regulatory-disclosures>
+
+<app-review-direction
+    *ngIf="showReviewSectionQuestion"
+    (selectionChanged)="dataService.onChangeRegulatoryDisclosure($event)"
+    [selectedReviewDirections]="selectedReviewDirections"
+></app-review-direction>
+
+<app-japanese-considerations
+    *ngIf="selectedJurisdiction === regionJurisdiction.Japan"
+    [considerationDetails]="japaneseConsideration"
+></app-japanese-considerations>
+<app-sfg-regulatory-disclosure
+    *ngIf="
+        selectedRatingGroup === ratingGroupType.SFGCoveredBonds || selectedRatingGroup === ratingGroupType.SFGPrimary
+    "
+></app-sfg-regulatory-disclosure>
+<app-debt-information
+    *ngIf="
+        !featureFlagService?.getTreatmentState(splitTreatments.ONLINE_RATING_RECOMMENDATION_TABLE) &&
+        displayRetrieveCurrentRating
+    "
+></app-debt-information>
+
+<app-bottom-navbar
+    [navMetaData]="buttonMetadata"
+    [sectionIsValid]="
+        showMethodologyRedesignedComponent ? useNewMethodologyValidatorStatus() : checkAllRequiredFieldValidationsPass()
+    "
+    [prevPage]="appRoutes.ENTITY_SELECTION"
+    [nextPage]="
+        flagRatingRecommendationTable
+            | nextPage : selectedRatingGroup : dataService.committeSupportWrapper.ratingCommitteeMemo
+    "
+    (continueClickedEventEmitter)="onClickDownload(); updateModel()"
+    [isDownloadStage]="
+        selectedRatingGroup === ratingGroupType.SFGCoveredBonds || selectedRatingGroup === ratingGroupType.SFGPrimary
+    "
+    [enableActionButton]="true"
+    [isRatingsTableValid]="true"
+></app-bottom-navbar>
