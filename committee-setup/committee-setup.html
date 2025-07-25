@@ -1,0 +1,45 @@
+<app-page-title (navToHome)="navToHome()" title="{{ 'committeeSetupProperties.title' | translate }}"></app-page-title>
+<app-committee-setup-properties
+    [usePrimaryMethodologyRedesign]="showMethodologyRedesignedComponent"
+    (primaryMethodologyChange)="onPrimaryMethodologyChange()"
+></app-committee-setup-properties>
+
+<app-primary-methodology-enhanced
+    *ngIf="showMethodologyRedesignedComponent"
+    (sectionIsValid)="methodologySectionIsValid = $event"
+></app-primary-methodology-enhanced>
+<app-key-factual-elements></app-key-factual-elements>
+<app-review-direction
+    *ngIf="showReviewSectionQuestion"
+    (selectionChanged)="dataService.onChangeRegulatoryDisclosure($event)"
+    [selectedReviewDirections]="selectedReviewDirections"
+></app-review-direction>
+<app-entity-shareholders-verification *ngIf="showEntityShareHolderSection()"></app-entity-shareholders-verification>
+<app-esg-considerations *ngIf="showEsgQuesetions">
+    
+</app-esg-considerations>
+<app-committee-memo-questions></app-committee-memo-questions>
+<app-debt-information
+    *ngIf="
+        !featureFlagService?.getTreatmentState(splitTreatments.ONLINE_RATING_RECOMMENDATION_TABLE) &&
+        displayRetrieveCurrentRating
+    "
+></app-debt-information>
+
+<app-bottom-navbar
+    [navMetaData]="buttonMetadata"
+    [prevPage]="
+        committeeSupportWrapper.actionRequestForm ? appRoutes.ACTION_SETUP_PROPERTIES : appRoutes.ENTITY_SELECTION
+    "
+    [nextPage]="
+        isFIGTemplateSelected
+            ? appRoutes.COMPONENT_SELECTION_PROPERTIES
+            : flagRatingRecommendationTable
+            ? appRoutes.RATING_RECOMMENDATION
+            : null
+    "
+    [sectionIsValid]="checkAllRequiredFieldValidationsPass()"
+    (backClickedEventEmitter)="navBack()"
+    (continueClickedEventEmitter)="onClickDownload(); updateModel()"
+    [camsId]="committeSetupProperties?.committeeMemo?.conflictCheckId"
+></app-bottom-navbar>
