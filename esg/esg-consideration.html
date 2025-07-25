@@ -4,7 +4,13 @@
             {{ 'actionSetupProperties.esgConsideration.title' | translate }}
         </label>
     </div>
-    <div class="esg-content">
+    <div class="esg-content"
+    *ngIf="
+                    selectedRatingGroup === RatingGroupsEnum.SovereignBond ||
+                        selectedRatingGroup === RatingGroupsEnum.SubSovereign ||
+                        selectedRatingGroup === RatingGroupsEnum.SovereignMDB;
+                "
+    >
         <div class="esg-content-question">
             {{ 'actionSetupProperties.esgConsideration.recommendation.question' | translate }}
         </div>
@@ -12,17 +18,17 @@
             <blue-button-toggle [(ngModel)]="isESGRecommended" id="esgChoice" (ngModelChange)="resetSelectedFactors()">
                 <button
                     blueButtonToggleItem
-                    [attr.data-testid]="'esgChoice' + '_' + yesNoUnknownOptions.No"
-                    [value]="yesNoUnknownOptions.No"
-                >
-                    {{ 'yesNoOptions.NO' | translate }}
-                </button>
-                <button
-                    blueButtonToggleItem
                     [attr.data-testid]="'esgChoice' + '_' + yesNoUnknownOptions.Yes"
                     [value]="yesNoUnknownOptions.Yes"
                 >
                     {{ 'yesNoOptions.YES' | translate }}
+                </button>
+                <button
+                    blueButtonToggleItem
+                    [attr.data-testid]="'esgChoice' + '_' + yesNoUnknownOptions.No"
+                    [value]="yesNoUnknownOptions.No"
+                >
+                    {{ 'yesNoOptions.NO' | translate }}
                 </button>
             </blue-button-toggle>
         </div>
