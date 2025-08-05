@@ -1,0 +1,220 @@
+<div class="assumptions-container">
+    <ng-container *ngIf="selectedMethodologyList?.length">
+        <ng-container *ngTemplateOutlet="selectedMethodologyTable"></ng-container>
+
+        <ng-container *ngIf="!isRatingCommitteeClose">
+            <ng-container *ngTemplateOutlet="methodologyCheckBoxes"></ng-container>
+        </ng-container>
+    </ng-container>
+</div>
+
+<!--Table Template-->
+<ng-template #selectedMethodologyTable>
+    <div class="assumptions-table">
+        <div class="assumptions-table-header">
+            <span
+                class="assumptions-table-header_title span-3-col"
+                [ngClass]="{ 'span-7-col': isRatingCommitteeClose, 'span-3-col': !isRatingCommitteeClose }"
+            >
+                {{ 'actionSetupProperties.selectedRatingMethodology.label.title' | translate }}
+            </span>
+            <span
+                class="assumptions-table-header_title span-1-col"
+                [ngClass]="{ 'span-3-col': isRatingCommitteeClose, 'span-1-col': !isRatingCommitteeClose }"
+            >
+                {{ 'actionSetupProperties.selectedRatingMethodology.label.publicationDate' | translate }}
+            </span>
+            <ng-container *ngIf="!isRatingCommitteeClose">
+                <span class="assumptions-table-header_title span-4-col">
+                    {{ 'actionSetupProperties.selectedRatingMethodology.label.assumptionLabel' | translate }}
+                </span>
+            </ng-container>
+            <ng-container
+                *ngIf="
+                    isActionRequestFormSetup ||
+                    (!isActionRequestFormSetup &&
+                        !(
+                            this.isRatingCommitteeWorkflow
+                        ))
+                "
+            >
+                <span
+                    *ngIf="!this.isRatingGroupSFGPrimaryOrSFGCoveredBonds()"
+                    class="assumptions-table-header_title span-4-col"
+                >
+                    {{ 'actionSetupProperties.selectedRatingMethodology.label.question' | translate }}
+                </span>
+            </ng-container>
+        </div>
+
+        <ng-container *ngFor="let selectedRatingMethodology of selectedMethodologyList">
+            <div class="assumptions-table-body">
+                <!-- Rating Methodology -->
+                <div
+                    class="rating-methodology"
+                    [ngClass]="{ 'span-7-col': isRatingCommitteeClose, 'span-3-col': !isRatingCommitteeClose }"
+                >
+                    ({{ 'features.regionJurisdiction.options.' + methodologyJurisdiction?.jurisdiction | translate }})
+                    {{ selectedRatingMethodology.name }}
+                </div>
+
+                <div
+                    class="rating-methodology"
+                    [ngClass]="{ 'span-3-col pl-2': isRatingCommitteeClose, 'span-1-col': !isRatingCommitteeClose }"
+                >
+                    {{
+                        selectedRatingMethodology
+                            | getPublicationByRegion
+                                : { region: methodologyJurisdiction?.jurisdiction, returnType: 'effectiveDate' }
+                    }}
+                </div>
+
+                <!-- Methodology Assumption -->
+                <ng-container *ngIf="!isRatingCommitteeClose">
+                    <div class="span-4-col">
+                        <ng-container
+                            *ngIf="
+                                !(
+                                    selectedRatingMethodology
+                                    | getPublicationByRegion
+                                        : { region: methodologyJurisdiction?.jurisdiction, returnType: 'disclosure' }
+                                ) || selectedRatingMethodology.isUserSelection;
+                                else assumptionFixedAnswer
+                            "
+                        >
+                            <select
+                                class="methodology-assumption"
+                                blueSelect
+                                [attr.data-testid]="'methodologyAssumption_' + selectedRatingMethodology.id"
+                                (change)="onChangeDisclosure($event, selectedRatingMethodology)"
+                                [(ngModel)]="selectedRatingMethodology.disclosure"
+                            >
+                                <option [value]="undefined">
+                                    {{
+                                        'actionSetupProperties.selectedRatingMethodology.methodologyAssumptions.defaultLabel'
+                                            | translate
+                                    }}
+                                </option>
+                                <option
+                                    *ngFor="let assumptions of allMethodologySensitivities"
+                                    value="{{ assumptions }}"
+                                >
+                                    {{
+                                        'actionSetupProperties.selectedRatingMethodology.methodologyAssumptions.' +
+                                            assumptions | translate
+                                    }}
+                                </option>
+                            </select>
+                        </ng-container>
+
+                        <ng-template #assumptionFixedAnswer>
+                            <span
+                                class="rating-methodology methodology-assumption-width"
+                                [attr.data-testid]="'methodologyAssumptionDisclosure_' + selectedRatingMethodology.name"
+                            >
+                                {{
+                                    'actionSetupProperties.selectedRatingMethodology.methodologyAssumptions.' +
+                                        (selectedRatingMethodology
+                                            | getPublicationByRegion
+                                                : {
+                                                      region: methodologyJurisdiction?.jurisdiction,
+                                                      returnType: 'disclosure'
+                                                  }) | translate
+                                }}
+                            </span>
+                        </ng-template>
+                    </div>
+                </ng-container>
+                <!-- Credit Rating-->
+                <ng-container *ngIf="!isRatingCommitteeClose">
+                    <div
+                        *ngIf="
+                            isActionRequestFormSetup ||
+                            (!isActionRequestFormSetup &&
+                                !(
+                                    this.isRatingCommitteeWorkflow
+                                ))
+                        "
+                        class="credit-rating span-4-col"
+                    >
+                        <blue-button-toggle
+                            class="credit-rating_width"
+                            [(ngModel)]="selectedRatingMethodology.creditRatingUsed"
+                            (ngModelChange)="manageSectionValidity()"
+                            *ngIf="!this.isRatingGroupSFGPrimaryOrSFGCoveredBonds()"
+                        >
+                            <button
+                                *ngFor="let option of options"
+                                blueButtonToggleItem
+                                [value]="option.value"
+                                [attr.data-testid]="option.value + '_' + selectedRatingMethodology.id"
+                            >
+                                {{ option.translatedLabel | translate }}
+                            </button>
+                        </blue-button-toggle>
+                    </div>
+                </ng-container>
+                <!-- Actions-->
+                <div
+                    class="actions"
+                    [ngClass]="
+                        !isRatingCommitteeClose &&
+                        (isActionRequestFormSetup ||
+                        (!isActionRequestFormSetup &&
+                            !(
+                                this.isRatingCommitteeWorkflow
+                            ))
+                            ? 'actions-width-14'
+                            : 'actions-width-10')
+                    "
+                >
+                    <button
+                        blueButton
+                        class="button-link button-sm"
+                        (click)="removeMethodology(selectedRatingMethodology)"
+                    >
+                        <svg blueIcon="trash"></svg>
+                    </button>
+                </div>
+            </div>
+        </ng-container>
+    </div>
+</ng-template>
+
+<!--Checkbox Template-->
+<ng-template #methodologyCheckBoxes>
+    <div class="rated-methodology-checkbox">
+        <blue-field
+            [label]="'features.prDisclosure.questions.moreInfoThanSelectedMethodology.label' | translate"
+            [labelPosition]="labelPosition.After"
+            [inline]="true"
+            (change)="manageOnCheckBoxChecked(checkBoxOptionType.MORE_INFO)"
+        >
+            <input
+                class="shadow-none"
+                blueCheckbox
+                id="moreInfoThanSelMethodology"
+                data-testid="moreInfoThanSelMethodology"
+                type="checkbox"
+                [(ngModel)]="prDisclosure.moreInfoThanSelectedMethodology"
+            />
+        </blue-field>
+        <!--Domiciled Is Translate-->
+        <blue-field
+            [label]="'features.prDisclosure.questions.arabicDomicileKSA.label' | translate"
+            [labelPosition]="labelPosition.After"
+            [inline]="true"
+            (change)="manageOnCheckBoxChecked(checkBoxOptionType.ARABIC_TRANSLATED)"
+            *ngIf="isRatingCommitteeMemo"
+        >
+            <input
+                class="shadow-none"
+                blueCheckbox
+                id="arabicDomicileKSA"
+                data-testid="arabicDomicileKSA"
+                type="checkbox"
+                [(ngModel)]="prDisclosure.arabicTranslatedDomicileKSA"
+            />
+        </blue-field>
+    </div>
+</ng-template>
