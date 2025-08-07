@@ -23,9 +23,8 @@ import { PRDisclosure } from '../../../../shared/models/PRDisclosure';
 import { MethodologyCheckBoxOptionType } from '../../enums/enums';
 import { RatingGroupType } from 'src/app/shared/models/RatingGroupType';
 import { AppRoutes } from '../../../../routes/routes';
-import { DataService } from '@app/shared/services/data.service';
 import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
-
+import { DataService } from '@app/shared/services/data.service';
 
 @Component({
     selector: 'app-methodology-assumption-questions-enhanced',
@@ -56,13 +55,17 @@ export class MethodologyAssumptionQuestionsEnhancedComponent implements OnInit, 
     @Output() methodologyCheckBoxAction = new EventEmitter<PRDisclosureCheckBoxActions>();
 
     isRatingCommitteeMemo = false;
-    isRatingCommitteeWorkflow = false;
 
     arabicTranslatedDomicileKSA = false;
     moreInfoThanSelectedMethodology = false;
     RatingGroupsEnum = RatingGroupType;
 
-    constructor(private router: Router, private featureFlagService: FeatureFlagService, private dataService: DataService) {}
+
+    constructor(private router: Router, public dataService: DataService, public featureFlagService: FeatureFlagService) {}
+
+    readonly isRatingCommitteeWorkflow = this.featureFlagService.isCommitteeWorkflowEnabled(
+        this.dataService.committeSupportWrapper
+    );
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes.selectedMethodologyList && changes.selectedMethodologyList.currentValue) {
@@ -75,15 +78,12 @@ export class MethodologyAssumptionQuestionsEnhancedComponent implements OnInit, 
     }
 
     ngOnInit(): void {
-        this.isRatingCommitteeWorkflow = this.featureFlagService.isCommitteeWorkflowEnabled(
-            this.dataService.committeSupportWrapper
-        );
         this.setShowKsaPopupOnInitialQuestion();
     }
 
     manageSectionValidity() {
         if (
-             this.isRatingCommitteeWorkflow
+            this.isRatingCommitteeWorkflow
         ) {
             this.sectionIsValid.emit(true);
         } else {
