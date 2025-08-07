@@ -34,14 +34,14 @@ const CRQT_TEST_SCENARIOS = [
             referenceOnlyCRQT: YesNoUnknown.Yes,
             crqt: [{ creditRatingScoreCard: true, model: false }]
         },
-        isRatingCommitteeWorkflow: true
+        workflowEnabled: true
     })),
     ...[RatingGroupType.SovereignBond, RatingGroupType.SubSovereign, RatingGroupType.SovereignMDB].map((group) => ({
         scenario: 'Valid Rating Group Type - crqtDeterminedProposedCreditRating is No',
         result: true,
         selectedRatingGroup: group,
         committeeInfo: { crqtDeterminedProposedCreditRating: YesNoUnknown.No },
-        isRatingCommitteeWorkflow: true
+        workflowEnabled: true
     })),
     ...[RatingGroupType.SovereignBond, RatingGroupType.SubSovereign, RatingGroupType.SovereignMDB].map((group) => ({
         scenario: 'Valid Rating Group Type - creditRatingScoreCard is false',
@@ -53,14 +53,14 @@ const CRQT_TEST_SCENARIOS = [
             referenceOnlyCRQT: YesNoUnknown.Yes,
             crqt: [{ creditRatingScoreCard: false, model: false }]
         },
-        isRatingCommitteeWorkflow: true
+        workflowEnabled: true
     })),
     ...[ RatingGroupType.InfrastructureProjectFinance].map((group) => ({
         scenario: 'Invalid Rating Group Type - Always returns true',
         result: true,
         selectedRatingGroup: group,
         committeeInfo: { crqtDeterminedProposedCreditRating: YesNoUnknown.Yes },
-        isRatingCommitteeWorkflow: false
+        workflowEnabled: false
     })),
     {
         scenario: 'Valid Rating Group Type - Undefined crqtDeterminedProposedCreditRating',
@@ -69,7 +69,7 @@ const CRQT_TEST_SCENARIOS = [
         committeeInfo: {
             crqtDeterminedProposedCreditRating: undefined
         },
-        isRatingCommitteeWorkflow: true
+        workflowEnabled: true
     },
     {
         scenario: 'Valid Rating Group Type - Undefined leadAnalystVerifiedCRQT',
@@ -80,7 +80,7 @@ const CRQT_TEST_SCENARIOS = [
             leadAnalystVerifiedCRQT: undefined,
             referenceOnlyCRQT: YesNoUnknown.Yes
         },
-        isRatingCommitteeWorkflow: true
+        workflowEnabled: true
     },
     {
         scenario: 'Valid Rating Group Type - Undefined referenceOnlyCRQT',
@@ -91,7 +91,7 @@ const CRQT_TEST_SCENARIOS = [
             leadAnalystVerifiedCRQT: YesNoUnknown.Yes,
             referenceOnlyCRQT: undefined
         },
-        isRatingCommitteeWorkflow: true
+        workflowEnabled: true
     }
 ];
 
@@ -104,15 +104,6 @@ fdescribe('CommitteeSetupComponent', () => {
     let mockFeatureFlagService: jasmine.SpyObj<FeatureFlagService>;
     let mockMethodologyService: jasmine.SpyObj<MethodologyService>;
     let mockPrimaryMethodologyService: jasmine.SpyObj<PrimaryMethodologyService>;
-
-    // Helper function to override readonly properties
-    function overrideReadonlyProperty(obj: any, propertyName: string, value: any) {
-        Object.defineProperty(obj, propertyName, {
-            value: value,
-            writable: true,
-            configurable: true
-        });
-    }
 
     beforeEach(async () => {
         const mockCommitteeSupport = {
@@ -245,105 +236,26 @@ fdescribe('CommitteeSetupComponent', () => {
         expect(shareHolder).toBeTrue();
     });
 
-    // New tests for workflow properties
-    describe('ngOnInit - workflow initialization', () => {
-        it('should initialize isRatingCommitteeWorkflow based on feature flag service', () => {
-            // Override the readonly property for this test
-            overrideReadonlyProperty(component, 'isRatingCommitteeWorkflow', true);
-            
-            expect(component.isRatingCommitteeWorkflow).toBeTruthy();
-        });
-
-        it('should initialize isSovRatingCommitteeWorkflow based on feature flag service', () => {
-            // Override the readonly property for this test
-            overrideReadonlyProperty(component, 'isSovRatingCommitteeWorkflow', true);
-            
-            expect(component.isSovRatingCommitteeWorkflow).toBeTruthy();
-        });
-
-        it('should initialize isSubSovRatingCommitteeWorkflow based on feature flag service', () => {
-            // Override the readonly property for this test
-            overrideReadonlyProperty(component, 'isSubSovRatingCommitteeWorkflow', true);
-            
-            expect(component.isSubSovRatingCommitteeWorkflow).toBeTruthy();
-        });
-
-        it('should initialize isSovMdbRatingCommitteeWorkflow based on feature flag service', () => {
-            // Override the readonly property for this test
-            overrideReadonlyProperty(component, 'isSovMdbRatingCommitteeWorkflow', true);
-            
-            expect(component.isSovMdbRatingCommitteeWorkflow).toBeTruthy();
-        });
-
-        it('should set all workflow flags to false when feature flags return false', () => {
-            // The default values should already be false from the component initialization
+    // New tests for workflow properties - testing the actual readonly values
+    describe('workflow properties initialization', () => {
+        it('should have isRatingCommitteeWorkflow as false by default', () => {
             expect(component.isRatingCommitteeWorkflow).toBeFalsy();
+        });
+
+        it('should have isSovRatingCommitteeWorkflow as false by default', () => {
             expect(component.isSovRatingCommitteeWorkflow).toBeFalsy();
+        });
+
+        it('should have isSubSovRatingCommitteeWorkflow as false by default', () => {
             expect(component.isSubSovRatingCommitteeWorkflow).toBeFalsy();
+        });
+
+        it('should have isSovMdbRatingCommitteeWorkflow as false by default', () => {
             expect(component.isSovMdbRatingCommitteeWorkflow).toBeFalsy();
         });
     });
 
-    describe('validateCRQT - with rating committee workflow', () => {
-        beforeEach(() => {
-            // Override the readonly property to simulate rating committee workflow enabled
-            overrideReadonlyProperty(component, 'isRatingCommitteeWorkflow', true);
-            component.selectedRatingGroup = RatingGroupType.SovereignBond;
-        });
-
-        it('should return true when crqtDeterminedProposedCreditRating is Yes and required fields are set', () => {
-            component.committeeInfo = {
-                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
-                leadAnalystVerifiedCRQT: YesNoUnknown.Yes,
-                referenceOnlyCRQT: YesNoUnknown.Yes
-            } as CommitteeMemo;
-
-            expect(component.validateCRQT()).toBeTruthy();
-        });
-
-        it('should return false when crqtDeterminedProposedCreditRating is Yes but leadAnalystVerifiedCRQT is missing', () => {
-            component.committeeInfo = {
-                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
-                leadAnalystVerifiedCRQT: undefined,
-                referenceOnlyCRQT: YesNoUnknown.Yes
-            } as CommitteeMemo;
-
-            expect(component.validateCRQT()).toBeFalsy();
-        });
-
-        it('should return false when crqtDeterminedProposedCreditRating is Yes but referenceOnlyCRQT is missing', () => {
-            component.committeeInfo = {
-                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
-                leadAnalystVerifiedCRQT: YesNoUnknown.Yes,
-                referenceOnlyCRQT: undefined
-            } as CommitteeMemo;
-
-            expect(component.validateCRQT()).toBeFalsy();
-        });
-
-        it('should return true when crqtDeterminedProposedCreditRating is No', () => {
-            component.committeeInfo = {
-                crqtDeterminedProposedCreditRating: YesNoUnknown.No
-            } as CommitteeMemo;
-
-            expect(component.validateCRQT()).toBeTruthy();
-        });
-
-        it('should return false when crqtDeterminedProposedCreditRating is undefined', () => {
-            component.committeeInfo = {
-                crqtDeterminedProposedCreditRating: undefined
-            } as CommitteeMemo;
-
-            expect(component.validateCRQT()).toBeFalsy();
-        });
-    });
-
-    describe('validateCRQT - without rating committee workflow', () => {
-        beforeEach(() => {
-            // Ensure the readonly property is false (default state)
-            overrideReadonlyProperty(component, 'isRatingCommitteeWorkflow', false);
-        });
-
+    describe('validateCRQT - with workflow disabled (default)', () => {
         it('should always return true when isRatingCommitteeWorkflow is false', () => {
             component.committeeInfo = {
                 crqtDeterminedProposedCreditRating: undefined,
@@ -353,22 +265,118 @@ fdescribe('CommitteeSetupComponent', () => {
 
             expect(component.validateCRQT()).toBeTruthy();
         });
+
+        it('should return true even with invalid CRQT data when workflow is disabled', () => {
+            component.committeeInfo = {
+                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
+                leadAnalystVerifiedCRQT: undefined,
+                referenceOnlyCRQT: undefined
+            } as CommitteeMemo;
+
+            expect(component.validateCRQT()).toBeTruthy();
+        });
     });
 
-    // Add data-driven tests using the CRQT_TEST_SCENARIOS
-    describe('validateCRQT - data-driven tests', () => {
-        CRQT_TEST_SCENARIOS.forEach((scenario) => {
+    // Test with workflow enabled by creating a new component with different mock setup
+    describe('validateCRQT - with workflow enabled', () => {
+        let workflowEnabledComponent: CommitteeSetupComponent;
+        let workflowEnabledFixture: ComponentFixture<CommitteeSetupComponent>;
+
+        beforeEach(() => {
+            // Set up mocks to return true for workflow
+            mockFeatureFlagService.isCommitteeWorkflowEnabled.and.returnValue(true);
+            
+            // Create new component instance with workflow enabled
+            workflowEnabledFixture = TestBed.createComponent(CommitteeSetupComponent);
+            workflowEnabledComponent = workflowEnabledFixture.componentInstance;
+            workflowEnabledFixture.detectChanges();
+        });
+
+        it('should have isRatingCommitteeWorkflow as true when feature flag is enabled', () => {
+            expect(workflowEnabledComponent.isRatingCommitteeWorkflow).toBeTruthy();
+        });
+
+        it('should return true when crqtDeterminedProposedCreditRating is Yes and required fields are set', () => {
+            workflowEnabledComponent.committeeInfo = {
+                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
+                leadAnalystVerifiedCRQT: YesNoUnknown.Yes,
+                referenceOnlyCRQT: YesNoUnknown.Yes
+            } as CommitteeMemo;
+
+            expect(workflowEnabledComponent.validateCRQT()).toBeTruthy();
+        });
+
+        it('should return false when crqtDeterminedProposedCreditRating is Yes but leadAnalystVerifiedCRQT is missing', () => {
+            workflowEnabledComponent.committeeInfo = {
+                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
+                leadAnalystVerifiedCRQT: undefined,
+                referenceOnlyCRQT: YesNoUnknown.Yes
+            } as CommitteeMemo;
+
+            expect(workflowEnabledComponent.validateCRQT()).toBeFalsy();
+        });
+
+        it('should return false when crqtDeterminedProposedCreditRating is Yes but referenceOnlyCRQT is missing', () => {
+            workflowEnabledComponent.committeeInfo = {
+                crqtDeterminedProposedCreditRating: YesNoUnknown.Yes,
+                leadAnalystVerifiedCRQT: YesNoUnknown.Yes,
+                referenceOnlyCRQT: undefined
+            } as CommitteeMemo;
+
+            expect(workflowEnabledComponent.validateCRQT()).toBeFalsy();
+        });
+
+        it('should return true when crqtDeterminedProposedCreditRating is No', () => {
+            workflowEnabledComponent.committeeInfo = {
+                crqtDeterminedProposedCreditRating: YesNoUnknown.No
+            } as CommitteeMemo;
+
+            expect(workflowEnabledComponent.validateCRQT()).toBeTruthy();
+        });
+
+        it('should return false when crqtDeterminedProposedCreditRating is undefined', () => {
+            workflowEnabledComponent.committeeInfo = {
+                crqtDeterminedProposedCreditRating: undefined
+            } as CommitteeMemo;
+
+            expect(workflowEnabledComponent.validateCRQT()).toBeFalsy();
+        });
+    });
+
+    // Simplified data-driven tests that work with the readonly properties
+    describe('validateCRQT - data-driven tests for workflow disabled scenarios', () => {
+        const disabledWorkflowScenarios = CRQT_TEST_SCENARIOS.filter(s => !s.workflowEnabled);
+        
+        disabledWorkflowScenarios.forEach((scenario) => {
             it(`should return ${scenario.result} for scenario: ${scenario.scenario}`, () => {
-                // Set up the rating group
                 mockDataService.getSelectedRatingGroup.and.returnValue(scenario.selectedRatingGroup);
-                
-                // Override the readonly property based on the scenario
-                overrideReadonlyProperty(component, 'isRatingCommitteeWorkflow', scenario.isRatingCommitteeWorkflow);
-                
                 component.selectedRatingGroup = scenario.selectedRatingGroup;
                 component.committeeInfo = scenario.committeeInfo as CommitteeMemo;
 
                 const result = component.validateCRQT();
+                expect(result).toBe(scenario.result);
+            });
+        });
+    });
+
+    describe('validateCRQT - data-driven tests for workflow enabled scenarios', () => {
+        const enabledWorkflowScenarios = CRQT_TEST_SCENARIOS.filter(s => s.workflowEnabled);
+        
+        enabledWorkflowScenarios.forEach((scenario) => {
+            it(`should return ${scenario.result} for scenario: ${scenario.scenario}`, () => {
+                // Set up mocks for workflow enabled
+                mockFeatureFlagService.isCommitteeWorkflowEnabled.and.returnValue(true);
+                mockDataService.getSelectedRatingGroup.and.returnValue(scenario.selectedRatingGroup);
+                
+                // Create new component instance with workflow enabled
+                const enabledFixture = TestBed.createComponent(CommitteeSetupComponent);
+                const enabledComponent = enabledFixture.componentInstance;
+                enabledFixture.detectChanges();
+                
+                enabledComponent.selectedRatingGroup = scenario.selectedRatingGroup;
+                enabledComponent.committeeInfo = scenario.committeeInfo as CommitteeMemo;
+
+                const result = enabledComponent.validateCRQT();
                 expect(result).toBe(scenario.result);
             });
         });
