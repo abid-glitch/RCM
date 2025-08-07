@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { CommitteeMemo } from 'src/app/shared/models/CommittteeMemo';
 import { EntityService } from 'src/app/shared/services/entity.service';
 import { DataService } from 'src/app/shared/services/data.service';
@@ -7,9 +7,11 @@ import { CommitteeSupport } from 'src/app/shared/models/CommitteeSupport';
 import { PrimaryMethodologyService } from '../primary-methodology-enhanced/services/primary-methodology.service';
 import { count, debounceTime, filter, map, switchMap, takeUntil, tap } from 'rxjs/operators';
 import { RatingGroupType } from '@app/shared/models/RatingGroupType';
-import { Methodology } from '../../shared/models/Methodology';
-import { Observable, Subject } from 'rxjs';
+import { Methodology } from '@shared/models/Methodology';
+import { auditTime, Observable, Subject } from 'rxjs';
 import { BlueFieldLabelPosition } from '@moodys/blue-ng';
+import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
+
 @Component({
     selector: 'app-committee-memo-questions',
     templateUrl: './committee-memo-questions.component.html',
@@ -18,8 +20,8 @@ import { BlueFieldLabelPosition } from '@moodys/blue-ng';
 
 // CODE_DEBT: have setter/getter in data.service to interact with Main Model
 export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
-    // @Input() selectedMethodologyList?: Methodology[];
-    private destroy$ = new Subject<void>();
+    @Input() continueClicked: boolean;
+    private readonly destroy$ = new Subject<void>();
 
     committeeInfo: CommitteeMemo;
     committeeSupportWrapper: CommitteeSupport;
@@ -28,6 +30,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     public isCrsCrmVerifiedEnabled: boolean;
     public isInsuranceScoreUseEnabled: boolean;
     public isInsScrdOverIndMethodologyEnabled: boolean;
+    public isCRQTEnabledRatingGroups = false;
 
     private allRequiredInputValid = false;
     public primaryMethodologyAvailable = false;
@@ -45,7 +48,6 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
             this.updateCreditModelQuestionDisplay();
         })
     );
-    readonly selectedMethodologies$ = this.primaryMethodologyService.selectedMethodology$;
     readonly selectedMethodologyValues$: Observable<Methodology[]> =
         this.primaryMethodologyService.selectedMethodology$.pipe(
             filter((methodology) => !!methodology),
@@ -59,18 +61,35 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
     constructor(
         public entityService: EntityService,
         public dataService: DataService,
-        private primaryMethodologyService: PrimaryMethodologyService
+        public featureFlagService: FeatureFlagService,
+        private readonly _changeDetectorRef: ChangeDetectorRef,
+        private readonly primaryMethodologyService: PrimaryMethodologyService
     ) {}
+
+    readonly isRatingCommitteeWorkflow = this.featureFlagService.isCommitteeWorkflowEnabled(
+        this.dataService.committeSupportWrapper
+    );
+    readonly isSovRatingCommitteeWorkflow = this.featureFlagService.isSOVCommitteeWorkflowEnabled(
+        this.dataService.committeSupportWrapper
+    );
+    readonly isSubSovRatingCommitteeWorkflow = this.featureFlagService.isSUBSOVCommitteeWorkflowEnabled(
+        this.dataService.committeSupportWrapper
+    );
+    readonly isSovMdbRatingCommitteeWorkflow = this.featureFlagService.isSOVMDBCommitteeWorkflowEnabled(
+        this.dataService.committeSupportWrapper
+    );
 
     ngOnInit(): void {
         this.committeeSupportWrapper = this.dataService.committeSupportWrapper;
         this.committeeInfo = this.committeeSupportWrapper.committeeMemoSetup;
         this.updateCreditModelQuestionDisplay();
+        this.enableCRQTQuestionsBasedOnRatingGroups();
 
         this.updateCRQT$
             .pipe(
                 filter((status) => !!status),
                 switchMap(() => this.selectedMethodologyValues$),
+                auditTime(500),
                 tap((methodologyList) => {
                     this.committeeInfo.crqt = this.committeeInfo.crqt.filter(
                         (crqt) =>
@@ -86,6 +105,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
                             });
                         }
                     }
+                    this._changeDetectorRef.detectChanges();
                 }),
                 takeUntil(this.destroy$)
             )
@@ -102,9 +122,17 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         this.destroy$.complete();
     }
 
+    enableCRQTQuestionsBasedOnRatingGroups() {
+        this.isCRQTEnabledRatingGroups =
+            this.isRatingCommitteeWorkflow
+    }
+
     public updateCreditModelQuestionDisplay() {
         this.isLGDModelUsedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-1');
-        this.isCrsCrmVerifiedEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
+        const standardCrsCrmVisibility = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-2');
+
+        this.isCrsCrmVerifiedEnabled =
+            standardCrsCrmVisibility || this.selectedRatingGroup === RatingGroupType.NonBanking;
         this.isInsuranceScoreUseEnabled = this.rcmCreditModelQuestionEnabled('rcm-creditmodel-question-3');
         this.updateInsuranceScoreCardUsed();
         this.clearCrqtQuestionsWhenHidden();
@@ -194,9 +222,7 @@ export class CommitteeMemoQuestionsComponent implements OnInit, OnDestroy {
         if (
             (this.isLGDModelUsedEnabled && selectedLgdModelUsed === undefined) ||
             (!(
-                this.selectedRatingGroup === this.RatingGroupsEnum.SovereignBond ||
-                this.selectedRatingGroup === this.RatingGroupsEnum.SubSovereign ||
-                this.selectedRatingGroup === this.RatingGroupsEnum.SovereignMDB
+                this.isRatingCommitteeWorkflow
             ) &&
                 this.isCrsCrmVerifiedEnabled &&
                 selectedCrsCrmVerified === undefined) ||
