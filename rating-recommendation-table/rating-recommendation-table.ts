@@ -1,451 +1,389 @@
-import { ChangeDetectorRef, Component, HostBinding, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { BlueModalRef, BlueModalService, BlueTableData } from '@moodys/blue-ng';
-import { RatingRecommendationService } from './services/rating-recommendation.service';
-import { AppRoutes } from '../../routes/routes';
-import { RatingRecommendationTableView, TableDataLoadingStatus } from './enums/rating-recommendation.enum';
 import {
-    ActionMenuProp,
+    AfterViewInit,
+    ChangeDetectionStrategy,
+    Component,
+    EventEmitter,
+    Input,
+    OnDestroy,
+    OnInit,
+    Output
+} from '@angular/core';
+import {
+    CustomDebt,
+    CustomRatingClass,
     RatingRecommendationUpdatedAction,
-    RatingSyncedData,
-    SelectedRatingRecommendationEntities
-} from './interfaces';
-import { NavButtonMetadata } from '../../shared/components/bottom-navbar';
-import { RatingGroupType } from '../../shared/models/RatingGroupType';
-import { RatingTemplate } from '../../shared/models/RatingTemplate';
-import { BehaviorSubject, combineLatest, iif, merge, Observable, of, Subject } from 'rxjs';
-import { ContentLoaderService } from '../../shared/services/content-loader.service';
-import { distinctUntilChanged, filter, map, shareReplay, switchMap, takeUntil, tap } from 'rxjs/operators';
-import { NotificationsService } from 'src/app/core/services/notifications.service';
-import { CasesService, CaseStatus } from '@shared/services/cases';
-import { DataService } from '@shared/services/data.service';
-import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
-import { Router } from '@angular/router';
-import { RecommendationInputTypes } from './enums';
-import { CustomRatingClassData, CustomRatingClassState } from './models/custom-rating-class-state';
-import { Entity } from '@app/shared/models/Entity';
-import { EntityService } from '@app/shared/services/entity.service';
-import { SplitTreatments } from '@app/shared/models/SplitTreatment';
-import _ from 'lodash';
-import { UnSavedChanges } from '@app/shared/models/UnSavedChanges';
-import { BottomNavbarComponent } from '@app/shared/components/bottom-navbar/bottom-navbar.component';
-import { CommitteeSupport } from '@app/shared/models/CommitteeSupport';
-import { CommitteePackageApiService } from '@app/close/repository/committee-package-api.service';
+    RecommendationDropDownOption,
+    SelectedRatingRecommendationEntities,
+    SelectionDetails
+} from '../../interfaces';
+import { RatingRecommendationTableView } from '../../enums/rating-recommendation.enum';
+import { BehaviorSubject, combineLatest, merge, of, Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, filter, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { RecommendationInputTypes } from '../../enums';
+import { BluePopoverEvent, BlueTableCheckboxScope, BlueTableData, BlueTableRowData } from '@moodys/blue-ng';
+import { BlueInputConst } from '@moodys/blue-ng/lib/util';
+import { BlueIconName } from '@moodys/blue-ng/tmp/icons/ts/blue-icon-name';
+import { FormBuilder, FormControl, FormGroup } from '@angular/forms';
+import { getRatingClassIdentifier } from '@features/rating-recommendation';
+import { RatingClassMetadata } from '@app/shared/models/RatingClassMetadata';
+import {
+    CustomRatingClassData,
+    CustomRatingClassDataComicile,
+    CustomRatingClassState
+} from '../../models/custom-rating-class-state';
+import { CustomDebtData, CustomDebtState } from '../../models/custom-debt-state';
+import { LocalizedDatePipe } from '@app/shared/pipes/localized-date.pipe';
 
 @Component({
-    selector: 'app-rating-recommendation-table',
-    templateUrl: './rating-recommendation-table.component.html',
-    styleUrls: ['./rating-recommendation-table.component.scss']
+    selector: 'app-recommendation-table',
+    templateUrl: './recommendation-table.component.html',
+    styleUrls: ['./recommendation-table.component.scss'],
+    changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class RatingRecommendationTableComponent implements OnInit, OnDestroy, UnSavedChanges {
-    @HostBinding('attr.id') role = 'rcmRatingRecommendationPage';
+export class RecommendationTableComponent implements OnInit, OnDestroy, AfterViewInit {
+    /*Table Header Colspan Defaults */
+    readonly defaultColSpanEntityNameOrIDClassView = 4;
+    readonly defaultColSpanEntityNameOrIDDebtView = 2;
 
-    modalRef: BlueModalRef;
-    /* Header component data stream*/
-    viewTableBy$ = this.ratingRecommendationService.selectedRatingViewBy$;
-    headerDetail$ = this.ratingRecommendationService.ratingRecommendationHeaderDetail$;
-    enableActionButton$ = this.ratingRecommendationService.enableGroupActionButton$;
-    enableCustomRatingClassButton$ = this.ratingRecommendationService.enableCustomRatingClassButton$;
-    isFigBanking$ = this.ratingRecommendationService.isFigBankingRatingGroup$;
-    customRatingClasses$ = this.ratingRecommendationService.customRatingClasses$;
-    ratingRecommendation$ = this.ratingRecommendationService.ratingRecommendationsTableData$.pipe(
-        filter((ratingRecommendation) => ratingRecommendation.length > 0)
-    );
+    readonly defaultColSpanCurrentClassView = 5;
+    readonly defaultColSpanCurrentDebtView = 6;
 
-    recommendationsDropdownOptionMapping$ = this.ratingRecommendationService.getRecommendationsDropdownOptionMapping$;
+    readonly defaultColSpanViewFig = 5;
 
-    warningAndSuccessAlert$ = this.ratingRecommendationService.bulkActionSuccessAndWarningAlert$;
+    @Input() ratingRecommendation!: BlueTableData;
+    @Input() selectedTableView!: RatingRecommendationTableView;
+    @Input() recommendationsDropdownOptionMapping!: RecommendationDropDownOption;
+    @Input() isFigBanking!: boolean;
+    @Input() continueClicked = false;
+    @Input() customRatingClassesState: Record<string, CustomRatingClassState>;
+    private _customRatingClasses: CustomRatingClass[] = [];
+    @Input()
+    set customRatingClasses(value: CustomRatingClass[]) {
+        this._customRatingClasses = value;
+        this._onRatingClassChanged();
+    }
+    @Input() ratingsMetadataLookup: RatingClassMetadata[];
+    @Input() isCommitteeWorkflow = false;
 
-    isLoading$ = this.ratingRecommendationService.tableDataIsLoadingState$.pipe(
-        distinctUntilChanged(),
-        tap((tableStatus) => {
-            if (tableStatus === TableDataLoadingStatus.RetrievingData || tableStatus === '') {
-                this.contentLoaderService.show();
-            } else {
-                this.contentLoaderService.hide();
-            }
-        })
-    );
+    @Input() customDebtsState: Record<string, CustomDebtState>;
+    private _customDebts: CustomDebt[] = [];
+    @Input()
+    set customDebts(value: CustomDebt[]) {
+        this._customDebts = value;
+        this._onDebtsChanged();
+    }
 
-    hideCustomRatingClassButton$ = this.viewTableBy$.pipe(
-        map((tableView) => tableView !== RatingRecommendationTableView.Class)
-    );
+    readonly tableViewType = RatingRecommendationTableView;
+    readonly checkboxScope = BlueTableCheckboxScope;
+    readonly inputTypes = RecommendationInputTypes;
+    readonly reviewStatus = RecommendationInputTypes.REVIEW_STATUS;
 
-    private viewChangesSubject$ = new BehaviorSubject<RatingRecommendationTableView | null>(null);
+    readonly popoverEvent = BluePopoverEvent;
+    readonly removeIcon: BlueInputConst<typeof BlueIconName> = 'trash';
 
-    manageRatingsSyncDirection$: Observable<void> = this.viewChangesSubject$.pipe(
-        filter((viewBy) => !!viewBy),
-        tap(() => this.ratingRecommendationService.setTableLoadingState('')),
-        switchMap(() => this.ratingRecommendationService.allRatingsWithIssuerLevelRatingInDebtView$),
-        switchMap(() =>
-            iif(
-                () => this.ratingRecommendationService.currentSyncDirection(),
-                this.ratingRecommendationService.getSyncedRating(),
-                of(null)
-            )
-        ),
-        tap((syncedEntities: RatingSyncedData | null) => {
-            this.ratingRecommendationService.changeRatingTableViewBy(this.viewChangesSubject$.value, syncedEntities);
-            this.cdrRef.detectChanges();
-        }),
-        map(() => undefined)
-    );
+    selectedEntity = new Map<RatingRecommendationTableView, BlueTableData>();
+    @Output() selectedEntityChanged = new EventEmitter<SelectedRatingRecommendationEntities>();
 
-    appRoutes = AppRoutes;
-    buttonMetadata!: NavButtonMetadata;
-    isFIGTemplateSelected: boolean;
-    ratingTemplate = RatingTemplate;
-    selectedTemplate = this.ratingRecommendationService.getSelectedTemplate();
-    updateRatingRecommendation$ = new Subject<BlueTableData>();
-    countryCode = '';
-    countryCeilings: BlueTableData = [];
-    isCountryCeilingsEnabled = true;
-    caseId: string;
-    committeeSupportWrapper: CommitteeSupport;
+    @Output() recommendationChange = new EventEmitter<RatingRecommendationUpdatedAction<Record<string, any>>>();
+    @Output() updatedRatingRecommendation = new EventEmitter<BlueTableData>();
+    @Output() ratingClassRemoved = new EventEmitter<string>();
+    @Output() ratingClassChanged = new EventEmitter<CustomRatingClassData>();
 
-    ratingRecommendationValidator$ = merge(this.ratingRecommendation$, this.updateRatingRecommendation$);
-    customRatingClassesState$ = new BehaviorSubject<Record<string, CustomRatingClassState>>({});
+    @Output() debtRemoved = new EventEmitter<string>();
+    @Output() debtChanged = new EventEmitter<CustomDebtData>();
 
-    isRatingsTableValid$ = this.ratingRecommendationValidator$.pipe(
-        tap(() => this.cdrRef.detectChanges()),
-        map((data) => {
-            const tableValidation = data.every((table) => {
-                return (
-                    table.children.filter((row) => !row.data.isSubTableHeader).length === 0 ||
-                    table.children
-                        .filter((tableRow) => !tableRow.data.isSubTableHeader && tableRow.isSelected)
-                        .every(
-                            (tableRow) =>
-                                (tableRow.data.recommendationInputType === RecommendationInputTypes.OUTLOOK &&
-                                    !!tableRow.data.proposedOutlook &&
-                                    tableRow.data.proposedOutlook !== 'null') ||
-                                (tableRow.data.recommendationInputType !== RecommendationInputTypes.OUTLOOK &&
-                                    !!tableRow.data.proposedRating &&
-                                    tableRow.data.proposedRating !== 'null')
-                        )
-                );
-            });
+    manageCheckboxSelected = new BehaviorSubject<SelectedRatingRecommendationEntities | null>(null);
+    unSubscribe = new Subject<void>();
 
-            return tableValidation;
-        }),
-        tap(() => this.cdrRef.detectChanges()),
-        shareReplay({ bufferSize: 1, refCount: true })
-    );
+    /*To Ensure Sync Happens In Debt View*/
+    private initializeSelectedDebtView = false;
 
-    readonly isRatingCommitteeWorkflow =
-        (this.featureFlagService.isCommitteeWorkflowEnabled() &&
-            this.ratingRecommendationService.isRatingCommitteeWorkflowEnabled()) ||
-        (this.featureFlagService.isCommitteeWorkflowEnabledFIG() &&
-            this.ratingRecommendationService.isRatingCommitteeWorkflowEnabledFIG()) ||
-        (this.featureFlagService.isCommitteeWorkflowEnabledCFG() &&
-            this.ratingRecommendationService.isRatingCommitteeWorkflowEnabledCFG());
+    ratingClassForm: FormGroup;
+    debtForm: FormGroup;
 
-    isCommitteeWorkflow = false;
+    private customRatingClasses$ = new BehaviorSubject<
+        { identifier: string; domicile: { code: string; name: string } }[]
+    >([]);
 
-    continueClicked$ = new BehaviorSubject<boolean>(false);
-    ratingsMetadataLookup$ = this.ratingRecommendationService.getRatingClasses();
-    isRatingRecommendationFlagOn = false;
+    private customDebts$ = new BehaviorSubject<
+        { entityId: string; identifier: string; domicile: { code: string; name: string } }[]
+    >([]);
 
-    isDownloadCompleted$ = this.ratingRecommendationService.isDownloadCompleted$;
-    isRatingRecommendationTable = true;
+    readonly minMaturityDate: Date = new Date(new Date().setHours(0, 0, 0, 0));
 
-    constructor(
-        public ratingRecommendationService: RatingRecommendationService,
-        private contentLoaderService: ContentLoaderService,
-        private featureFlagService: FeatureFlagService,
-        @Inject(BlueModalService) private modalService: BlueModalService,
-        public notificationsService: NotificationsService,
-        public casesService: CasesService,
-        public dataService: DataService,
-        public router: Router,
-        private cdrRef: ChangeDetectorRef,
-        public entityService: EntityService,
-        private committeePackageApiService: CommitteePackageApiService
+    constructor(private readonly _formBuilder: FormBuilder, private readonly datePipe: LocalizedDatePipe) {
+        this.ratingClassForm = this._formBuilder.group({});
+        this._initializeCustomRatingClassFormChanges();
+
+        // Each debt will have its own form gorup, key/value pair
+        // Example - 123 : {ratingClass:'', description:'', currency} => FormGroup
+        this.debtForm = this._formBuilder.group({});
+
+        this._initializeCustomDebtFormChanges();
+    }
+
+    ngOnInit(): void {
+        this.initCheckboxActionObservable();
+    }
+
+    ngAfterViewInit(): void {
+        this.initializeSelected();
+        this.initializeSelectedDebtView = true;
+    }
+
+    // change to updateRecommendation
+    updateRecommendationEventEmitter(
+        event: RatingRecommendationUpdatedAction<Record<string, any>>,
+        row: BlueTableRowData
     ) {
-        this.isCommitteeWorkflow =
-            this.featureFlagService.isCommitteeWorkflowEnabled() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledFIG() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledCFG();
-
-        this.isRatingRecommendationFlagOn = this.featureFlagService.getTreatmentState(
-            SplitTreatments.ONLINE_RATING_RECOMMENDATION_TABLE
-        );
-        this.setEntities();
+        row.data = { ...event.rating };
+        this.recommendationChange.emit(event);
+        this.updatedRatingRecommendation.emit(this.ratingRecommendation);
     }
 
-    @ViewChild('bottomNavBar') bottomNavbar: BottomNavbarComponent;
-    hasUnsavedChanges: boolean;
-    discardChanges() {
-        this.dataService.committeSupportWrapper.resetEntities();
-    }
-    saveTable() {
-        return this.bottomNavbar.processUpdateCase(CaseStatus.Transitioned);
+    onEntityTableSelect(selectedEntity: BlueTableData) {
+        this.selectedEntity.set(this.selectedTableView, selectedEntity);
+        this.manageInitialDebtViewSync();
     }
 
-    setEntities() {
-        const selectedEntities: Entity[] = this.getSelectedEntities();
-
-        this.dataService.updateSelectedEntities(selectedEntities);
-
-        if (this.isRatingRecommendationFlagOn) {
-            this.ratingRecommendationService.setSelectedTemplate(this.dataService.selectedTemplateType);
-            this.ratingRecommendationService.setSelectedEntities(selectedEntities);
-        }
+    onEntityTableCheckBoxSelected(
+        checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
+        entityDetails = null
+    ) {
+        this.manageCheckboxSelected.next({
+            [this.selectedTableView]: {
+                blueTableData: this.selectedEntity.get(this.selectedTableView),
+                checkBoxEvent: checkBoxEvent,
+                entityDetails: entityDetails
+            } as SelectionDetails
+        });
     }
 
-    areSelectedCommitteeSupportPropsEqual(initial: CommitteeSupport, current: CommitteeSupport): boolean {
-        function pickProps(committeeSupport: CommitteeSupport) {
-            return committeeSupport.entities.map(entity => ({
-                id: entity.id,
-                outlook: (() => {
-                    if (!entity.outlook) return entity.outlook;
-                    const { proposedOutlook, value } = entity.outlook;
-                    const pickedOutlook = { proposedOutlook, value };
-                    return pickedOutlook;
-                })(),
-                ratingClasses: entity.ratingClasses.map(ratingClass => ({
-                    ratings: ratingClass.ratings.map(rating => {
-                        const data = { ...rating };
-                        delete data.refRatings;
-                        delete data.ratingClassBadges;
-                        return data;
-                    })
-                })),
-                debts: entity.debts.map(debt => ({
-                    ratings: debt.ratings.map(debtRating => {
-                        const data = { ...debtRating };
-                        delete data.refRatings;
-                        delete data.ratingClassBadges;
-                        return data;
-                    })
-                }))
-            }));
-        }
-        const initialProps = JSON.parse(JSON.stringify(pickProps(initial)));
-        const currentProps = JSON.parse(JSON.stringify(pickProps(current)));
-        return _.isEqual(initialProps, currentProps);
-    }
-
-    navBackToActionSetupProperties() {
-        const initialCommitteeSupport = this.dataService.initialCommitteeSupport;
-        const currentCommitteeSupport = this.committeeSupportWrapper;
-        let unSubscribe$ = new Subject<void>();
-        combineLatest([
-            this.ratingRecommendationService.ratingRecommendationsTableData$,
-            this.ratingRecommendationService.selectedRatingViewBy$
-        ] as [Observable<BlueTableData>, Observable<RatingRecommendationTableView>]).pipe(
-            tap(([value, viewBy]: [BlueTableData, RatingRecommendationTableView]) => {
-                this.bottomNavbar.removeUnselectedRatingClassesAndDebts(
-                    viewBy,
-                    this.ratingRecommendationService.selectedRatingRecommendationEntitiesSubject.value,
-                    currentCommitteeSupport,
-                    value
-                );
-                if (!this.areSelectedCommitteeSupportPropsEqual(initialCommitteeSupport, currentCommitteeSupport)) {
-                    this.hasUnsavedChanges = true;
-                } else {
-                    this.hasUnsavedChanges = false;
-                }
-                unSubscribe$.next();
-                unSubscribe$.complete();
-            }),
-            takeUntil(unSubscribe$)
-        ).subscribe();
-    }
-
-    getSelectedEntities(): Entity[] {
-        const selectedEntities: Entity[] = [];
-        this.entityService.selectedOrgTobeImpacted.forEach((org) =>
-            selectedEntities.push(
-                new Entity({
-                    id: org.id,
-                    name: org.name,
-                    type: org.type,
-                    analysts: org.analysts,
-                    rated: org.rated,
-                    category: org.category,
-                    domicile: org.domicile,
-                    productLineDescription: org.productLineDescription
-                } as Entity)
+    private initCheckboxActionObservable(): void {
+        this.manageCheckboxSelected
+            .pipe(
+                debounceTime(200),
+                tap((checkboxSelected) => this.emitSelectedEntities(checkboxSelected)),
+                takeUntil(this.unSubscribe)
             )
-        );
-        return selectedEntities;
+            .subscribe();
     }
 
-    ngOnInit() {
-        this.committeeSupportWrapper = this.dataService.committeSupportWrapper;
-        this.dataService.initialCommitteeSupport = _.cloneDeep(this.committeeSupportWrapper);
-        this.caseId = this.committeeSupportWrapper?.id;
-        this.isFIGTemplateGroup();
-        this.setNavButtonMetadata();
-        this.ratingRecommendationService.determineDefaultView();
-        this.setDownloadCompleted(false);
-        this.loadCountryCeilingData();
-    }
+    private emitSelectedEntities(checkboxSelected: SelectedRatingRecommendationEntities) {
+        if (checkboxSelected) {
+            const selectedEntities: SelectedRatingRecommendationEntities = {
+                [this.selectedTableView]: {
+                    ...checkboxSelected[this.selectedTableView],
+                    blueTableData: this.selectedEntity.get(this.selectedTableView)
+                }
+            };
 
-    private setDownloadCompleted(isDownloadCompleted: boolean) {
-        this.ratingRecommendationService.isDownloadCompleted$.next(isDownloadCompleted);
-    }
-
-    updateViewTableBy(viewBy: RatingRecommendationTableView): void {
-        this.viewChangesSubject$.next(viewBy);
-    }
-
-    onSelectedRatingEntity(selectedEntities: SelectedRatingRecommendationEntities) {
-        this.ratingRecommendationService.setSelectedRatingRecommendationEntities(selectedEntities);
-    }
-
-    onRecommendationChange(recommendation: RatingRecommendationUpdatedAction<Record<string, any>>) {
-        this.ratingRecommendationService.updateRecommendation(recommendation);
-    }
-
-    onUpdatedRatingRecommendation(recommendation: BlueTableData) {
-        this.updateRatingRecommendation$.next(recommendation);
-    }
-
-    onContinueClicked() {
-        this.continueClicked$.next(true);
-        this.hasUnsavedChanges = false;
-    }
-    private isFIGTemplateGroup() {
-        const figTemplateGroup: RatingGroupType[] = [
-            RatingGroupType.BankingFinanceSecurities,
-            RatingGroupType.Insurance,
-            RatingGroupType.NonBanking
-        ];
-        this.isFIGTemplateSelected = figTemplateGroup.includes(this.ratingRecommendationService.selectedRatingGroup());
-    }
-
-    setNavButtonMetadata() {
-        this.buttonMetadata = {
-            nextButton: {
-                buttonLabel: 'navigationControl.saveAndDownload',
-                buttonId: 'saveAndDownload'
-            },
-            prevButton: {
-                buttonLabel: 'navigationControl.backLabel',
-                buttonId: this.isFIGTemplateSelected ? 'backToComponentSelectionBtnt' : this.setBackButtonId()
-            }
-        };
-    }
-
-    setBackButtonId(): string {
-        return this.ratingRecommendationService.getSelectedTemplate() === this.ratingTemplate.Arf
-            ? 'backToArfBtn'
-            : 'backToRcmBtn';
-    }
-
-    onBulkActionDispatched(bulkAction: ActionMenuProp<string | number>) {
-        this.ratingRecommendationService.onBulkActionReceived(bulkAction);
-    }
-
-    addRatingClass() {
-        const addedClasses = this.ratingRecommendationService.onAddRatingClass();
-        if (addedClasses.length > 0) {
-            const data: Record<string, CustomRatingClassState> = {};
-            addedClasses.forEach((addedClass) => {
-                data[addedClass.ratingClass.id] = {
-                    loading: false,
-                    data: null
-                };
+            this.selectedEntityChanged.emit({
+                ...selectedEntities
             });
-            this.customRatingClassesState$.next({ ...this.customRatingClassesState$.value, ...data });
+        }
+    }
+
+    private initializeSelected() {
+        if (this.selectedEntity.has(this.selectedTableView)) {
+            const selectionDetails: SelectionDetails = {
+                checkBoxEvent: null,
+                entityDetails: null,
+                blueTableData: this.selectedEntity.get(this.selectedTableView)
+            };
+            const initValueSelected: SelectedRatingRecommendationEntities = {
+                [this.selectedTableView]: selectionDetails
+            };
+            this.manageCheckboxSelected.next(initValueSelected);
+        }
+    }
+
+    private manageInitialDebtViewSync() {
+        if (this.initializeSelectedDebtView && this.selectedTableView === RatingRecommendationTableView.Debt) {
+            this.initializeSelected();
+            this.initializeSelectedDebtView = false;
         }
     }
 
     onRatingClassRemoved(identifier: string) {
-        const customRatingClassesState = this.customRatingClassesState$.value;
-        delete customRatingClassesState[identifier];
-        this.customRatingClassesState$.next(customRatingClassesState);
-        this.ratingRecommendationService.removeRatingClass(identifier);
+        this.ratingClassRemoved.emit(identifier);
     }
 
-    ngOnDestroy(): void {
-        this.notificationsService.clearNotifications();
-        this.ratingRecommendationService.resetRatingRecommendationTable();
-        this.customRatingClassesState$.next({});
+    onDebtRemoved(identifier: string) {
+        this.debtRemoved.emit(identifier);
     }
 
-    onRatingClassChanged($event: CustomRatingClassData) {
-        const data: Record<string, CustomRatingClassState> = {};
-        const { identifier, domicile, ratingClassMetadata } = $event;
-        if (!ratingClassMetadata.ratingClassName) {
-            data[identifier] = {
-                loading: false,
-                data: null
-            };
-            this.customRatingClassesState$.next({ ...this.customRatingClassesState$.value, ...data });
+    private _onDebtsChanged() {
+        this._customDebts.forEach(this._setCustomDebt.bind(this));
+    }
 
-            return;
-        }
+    private _setCustomDebt(customDebt: CustomDebt) {
+        const identifier = customDebt.debt.ratings[0].identifier.toString();
+        const domicile = customDebt.domicile;
+        const debtFormGroup = this.getDebtFormGroup(identifier);
+        const currencyCode = customDebt.debt.currencyCode || '';
+        const maturityDate = customDebt.debt.maturityDate || '';
+        const originalFaceAmount = customDebt.debt.originalFaceAmount || '';
+        const name = customDebt.debt.name || '';
+        if (!debtFormGroup) {
+            const value = customDebt.debt.ratings[0].name;
+            const formGorup = this._formBuilder.group({
+                ratingClass: {},
+                name: name,
+                originalFaceAmount: originalFaceAmount,
+                currencyCode: currencyCode,
+                maturityDate: maturityDate ? new Date(maturityDate) : null
+            });
+            this.debtForm.addControl(identifier, formGorup);
 
-        let loading = true;
+            this.customDebts$.next([...this.customDebts$.value, { ...customDebt, identifier, domicile }]);
 
-        if (ratingClassMetadata.ratingScaleStrategy === RecommendationInputTypes.LDG) {
-            loading = false;
-        }
-
-        data[identifier] = {
-            loading,
-            data: {
-                identifier,
-                domicile,
-                ratingClassMetadata
+            if (value !== '') {
+                const lookup = this.ratingsMetadataLookup.find((metadata) => metadata.ratingClassName === value);
+                if (lookup) {
+                    formGorup.get('ratingClass').setValue(lookup);
+                }
             }
-        };
-        this.customRatingClassesState$.next({ ...this.customRatingClassesState$.value, ...data });
-
-        if (loading) {
-            this.ratingRecommendationService
-                .getRatingClassesOptions(
-                    ratingClassMetadata.ratingScaleCode,
-                    ratingClassMetadata.ratingScaleStrategy,
-                    domicile?.code
-                )
-                .subscribe((ratingScaleMetadata) => {
-                    this.ratingRecommendationService.onRatingClassChanged(
-                        identifier,
-                        ratingClassMetadata,
-                        ratingScaleMetadata
-                    );
-                    data[$event.identifier].loading = false;
-                    this.customRatingClassesState$.next({ ...this.customRatingClassesState$.value, ...data });
-                });
-        } else {
-            this.ratingRecommendationService.onRatingClassChanged(identifier, ratingClassMetadata, []);
         }
     }
 
-    loadCountryCeilingData(): void {
-        this.committeePackageApiService.getCommitteePackage(this.caseId, null).subscribe((response) => {
-            const entities = response.entities;
-            const org = entities.find((entity: any) => entity.type === 'ORGANIZATION');
-            const domicile = org?.domicile;
-            const sovereign = org?.sovereign;
+    private _onRatingClassChanged() {
+        this._customRatingClasses.forEach(this._setCustomRatingClass.bind(this));
+    }
 
-            if (domicile && sovereign) {
-                this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
-                this.cdrRef.markForCheck();
+    private _setCustomRatingClass(customRatingClass: CustomRatingClass) {
+        const identifier = getRatingClassIdentifier(customRatingClass.ratingClass);
+        const domicile = customRatingClass.domicile;
+        const ratingClassFormControl = this.getRatingClassFormControl(identifier);
+        if (!ratingClassFormControl) {
+            const value = customRatingClass.ratingClass.name;
+            const formControl = this._formBuilder.control({ ratingClassName: value });
+            this.ratingClassForm.addControl(identifier, formControl);
+            this.customRatingClasses$.next([...this.customRatingClasses$.value, { identifier, domicile }]);
+
+            if (value !== '') {
+                const lookup = this.ratingsMetadataLookup.find((metadata) => metadata.ratingClassName === value);
+                if (lookup) {
+                    formControl.setValue(lookup);
+                }
             }
+        }
+    }
+
+    getRatingClassFormControl(identifier: string) {
+        return this.ratingClassForm.controls[identifier] as FormControl;
+    }
+
+    getDebtFormGroup(identifier: string) {
+        return this.debtForm.get(identifier) as FormGroup;
+    }
+
+    private _initializeCustomRatingClassFormChanges() {
+        this.customRatingClasses$
+            .pipe(
+                filter((customRatingClasses) => customRatingClasses.length > 0),
+                switchMap((customRatingClasses) =>
+                    merge(
+                        ...customRatingClasses.map((customRatingClass) =>
+                            combineLatest([
+                                of(customRatingClass),
+                                this.ratingClassForm.get(customRatingClass.identifier).valueChanges
+                            ])
+                        )
+                    )
+                ),
+                takeUntil(this.unSubscribe)
+            )
+            .subscribe(this._onRatingClassFormChanges.bind(this));
+    }
+
+    private _onRatingClassFormChanges(
+        data: [{ identifier: string; domicile: CustomRatingClassDataComicile }, RatingClassMetadata]
+    ) {
+        const { identifier, domicile } = data[0];
+        const value = data[1];
+        this.ratingClassChanged.emit({ identifier, domicile, ratingClassMetadata: value });
+    }
+
+    private _initializeCustomDebtFormChanges() {
+        this.customDebts$
+            .pipe(
+                filter((customDebts) => customDebts.length > 0),
+                switchMap((customDebts) =>
+                    merge(
+                        ...customDebts.map((customDebt) => {
+                            return combineLatest([
+                                of(customDebt),
+                                this.debtForm.get(customDebt.identifier).valueChanges.pipe(distinctUntilChanged())
+                            ]);
+                        })
+                    )
+                ),
+                takeUntil(this.unSubscribe)
+            )
+            .subscribe(this._onDebtFormChanges.bind(this));
+    }
+
+    private _onDebtFormChanges(
+        data: [
+            { identifier: string; domicile: CustomRatingClassDataComicile; entityId: string },
+            {
+                name: string;
+                originalFaceAmount: string;
+                currencyCode: string;
+                maturityDate: string;
+                ratingClass: RatingClassMetadata;
+            }
+        ]
+    ) {
+        const { identifier, domicile, entityId } = data[0];
+        const { name, originalFaceAmount, currencyCode, ratingClass } = data[1];
+
+        let maturityDate = data[1].maturityDate;
+
+        if (maturityDate) {
+            maturityDate = this.datePipe.transform(new Date(maturityDate).toISOString(), 'YYYY-MM-dd');
+        }
+
+        this.debtChanged.emit({
+            entityId,
+            identifier,
+            domicile,
+            name,
+            originalFaceAmount,
+            currencyCode,
+            maturityDate,
+            ratingClassMetadata: ratingClass
         });
     }
 
-    private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
-        this.countryCode = domicile?.code;
-
-        return [
-            {
-                data: {
-                    localSovereignRating: this.getRating(sovereign?.ratings || [], 'DOMESTIC'),
-                    foreignSovereignRating: this.getRating(sovereign?.ratings || [], 'FOREIGN'),
-                    localCountryCeiling: this.getRating(domicile?.ceilings || [], 'DOMESTIC'),
-                    foreignCountryCeiling: this.getRating(domicile?.ceilings || [], 'FOREIGN')
-                }
-            }
-        ];
+    ngOnDestroy(): void {
+        this.unSubscribe.next();
+        this.unSubscribe.complete();
     }
 
-    private getRating(ratings: any[], currency: string): string {
-        const rating = ratings.find((r: any) => r.currency === currency);
-        return rating ? rating.value : '';
+    searchFn = (term: string): RatingClassMetadata[] => {
+        return this.ratingsMetadataLookup.filter((ratingClassMetadata) => {
+            const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return new RegExp(`${escapedTerm}`, 'gi').test(ratingClassMetadata.ratingClassName);
+        });
+    };
+
+    displayFn = (ratingClassMetadata: RatingClassMetadata) => {
+        return ratingClassMetadata.ratingClassName;
+    };
+
+    checkNextForSplitRating(currentIndex: number, currentItem: any): boolean {
+        const property = 'name';
+        const currencyProperty = 'currency';
+        if (currentIndex === 0 || currentIndex === 1) return false;
+        if (currentIndex < this.ratingRecommendation[0].children.length - 1) {
+            const previousItem = this.ratingRecommendation[0].children[currentIndex + 1];
+            return (
+                previousItem?.data?.[property] === currentItem?.data?.[property] &&
+                previousItem?.data?.[currencyProperty] === currentItem?.data?.[currencyProperty]
+            );
+        }
+        return false;
     }
 }
