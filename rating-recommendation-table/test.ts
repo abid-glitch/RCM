@@ -1,87 +1,150 @@
-// Replace the existing getter in BottomNavbarComponent with this:
-get isRasDocumentRequired(): boolean {
-    const rasRequired = this.dataService?.committeSupportWrapper?.rasEnabled;
-    console.log('RAS Document Required:', rasRequired);
-    return rasRequired || false;
-}
+// Add these properties to your component class
+private entityCheckboxStates = new Map<string, boolean>();
+private rowCheckboxStates = new Map<string, boolean>();
 
-// Update the onClickedRasDownload method to match your working version:
-onClickedRasDownload(): void {
-    const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation');
-    const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties');
-
-    if (isOnRatingRecommendationPage && !isOnSetupPage && this.isRasDocumentRequired) {
-        this.saveCurrentState();
-        this.initiateRasDownload();
+// Modified method to handle entity table checkbox selection
+onEntityTableCheckBoxSelected(
+    checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
+    entityDetails = null
+) {
+    // Handle different scopes
+    if (checkBoxEvent.scope === BlueTableCheckboxScope.All) {
+        // Select/deselect all logic
+        this.handleSelectAllCheckbox(checkBoxEvent.checked);
+    } else if (entityDetails) {
+        // Individual row selection
+        this.handleIndividualRowSelection(checkBoxEvent, entityDetails);
     } else {
-        this.confirmContinueSelection();
+        // Entity level selection
+        this.handleEntityLevelSelection(checkBoxEvent);
+    }
+
+    this.manageCheckboxSelected.next({
+        [this.selectedTableView]: {
+            blueTableData: this.selectedEntity.get(this.selectedTableView),
+            checkBoxEvent: checkBoxEvent,
+            entityDetails: entityDetails
+        } as SelectionDetails
+    });
+}
+
+private handleSelectAllCheckbox(checked: boolean) {
+    // Clear all states when selecting/deselecting all
+    this.entityCheckboxStates.clear();
+    this.rowCheckboxStates.clear();
+    
+    // Update all entity and row states
+    if (this.ratingRecommendation && this.ratingRecommendation[0]?.children) {
+        this.ratingRecommendation[0].children.forEach(entity => {
+            this.entityCheckboxStates.set(entity.data.id, checked);
+            if (entity.children) {
+                entity.children.forEach(row => {
+                    this.rowCheckboxStates.set(this.getRowKey(entity.data.id, row.data.identifier), checked);
+                });
+            }
+        });
     }
 }
 
-// Add these methods exactly as in your working code:
-private saveCurrentState(): void {
-    if (this.dataService?.committeSupportWrapper?.committeeMemoSetup) {
-        this.isSaveAction = true;
-        this.loading$.next(true);
+private handleEntityLevelSelection(checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope }) {
+    const currentEntity = this.selectedEntity.get(this.selectedTableView);
+    if (!currentEntity || !currentEntity[0]) return;
 
-        if (this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)) {
-            this.dataService.initialCommitteeSupport = _.cloneDeep(this.dataService.committeSupportWrapper);
+    const entityId = currentEntity[0].data?.id;
+    if (!entityId) return;
+
+    // Update entity state
+    this.entityCheckboxStates.set(entityId, checkBoxEvent.checked);
+
+    // When entity is deselected, deselect all its child rows
+    if (!checkBoxEvent.checked) {
+        if (currentEntity[0].children) {
+            currentEntity[0].children.forEach(row => {
+                const rowKey = this.getRowKey(entityId, row.data.identifier);
+                this.rowCheckboxStates.set(rowKey, false);
+                // Update the actual row selection state
+                row.isSelected = false;
+            });
         }
-        this.updateOrCreateNewCase(true);
+    } else {
+        // When entity is selected, select all its child rows
+        if (currentEntity[0].children) {
+            currentEntity[0].children.forEach(row => {
+                const rowKey = this.getRowKey(entityId, row.data.identifier);
+                this.rowCheckboxStates.set(rowKey, true);
+                // Update the actual row selection state
+                row.isSelected = true;
+            });
+        }
     }
 }
 
-private initiateRasDownload(): void {
-    console.log("Ras Download ... ");
+private handleIndividualRowSelection(
+    checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
+    entityDetails: any
+) {
+    const entityId = entityDetails?.immediateParent?.id || entityDetails?.id;
+    const rowIdentifier = entityDetails?.identifier;
+    
+    if (!entityId || !rowIdentifier) return;
+
+    const rowKey = this.getRowKey(entityId, rowIdentifier);
+    this.rowCheckboxStates.set(rowKey, checkBoxEvent.checked);
+
+    // Check if all child rows are selected to determine entity checkbox state
+    this.updateEntityCheckboxState(entityId);
 }
 
-// Update the getButtonText method to match your working logic:
-getButtonText(): string {
-    console.log("getButtonText called, currenturl : ", this.currentUrl);
-    console.log("isRasDocumentRequired : ", this.isRasDocumentRequired);
-    console.log("isRatingRecommendation : ", this.isRatingRecommendation);
-    console.log("isDownloadStage : ", this.isDownloadStage);
+private updateEntityCheckboxState(entityId: string) {
+    const currentEntity = this.ratingRecommendation[0]?.children?.find(
+        entity => entity.data.id === entityId
+    );
     
-    // Only show RAS DOWNLOAD text when specifically on rating-recommendation page
-    // and RAS document is required and not in download stage
-    const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation');
-    const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties');
-    const isOnComponentSelectionPage = this.currentUrl?.includes('component-selection-setup');
-    
-    console.log("isOnRatingRecommendationPage : ", isOnRatingRecommendationPage);
-    console.log("isOnSetupPage : ", isOnSetupPage);
-    console.log("isOnComponentSelectionPage : ", isOnComponentSelectionPage);
-    
-    if (isOnRatingRecommendationPage && 
-        !isOnSetupPage && this.isRasDocumentRequired && this.isRatingRecommendation && 
-        (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
-        !this.isDownloadStage) {
-        console.log("Returning RAS Download");
-        return this.translateService.instant('navigationControl.rasDownloadLabel');
+    if (!currentEntity || !currentEntity.children) return;
+
+    // Check if all child rows are selected
+    const allChildRowsSelected = currentEntity.children.every(row => {
+        const rowKey = this.getRowKey(entityId, row.data.identifier);
+        return this.rowCheckboxStates.get(rowKey) === true;
+    });
+
+    // Check if no child rows are selected
+    const noChildRowsSelected = currentEntity.children.every(row => {
+        const rowKey = this.getRowKey(entityId, row.data.identifier);
+        return this.rowCheckboxStates.get(rowKey) !== true;
+    });
+
+    // Update entity checkbox state
+    if (allChildRowsSelected) {
+        this.entityCheckboxStates.set(entityId, true);
+        currentEntity.isSelected = true;
+    } else if (noChildRowsSelected) {
+        this.entityCheckboxStates.set(entityId, false);
+        currentEntity.isSelected = false;
+    } else {
+        // Partial selection - you might want to handle this case differently
+        this.entityCheckboxStates.set(entityId, false);
+        currentEntity.isSelected = false;
     }
-    
-    // Show SAVE & CONTINUE when on rating-recommendation page but RAS not required
-    if (this.isRatingRecommendation && !this.isDownloadStage) { 
-        console.log("Returning Save and Continue");
-        console.log("selectedOrgTobeImpacted : ", this.entityService.selectedOrgTobeImpacted?.length);
-        console.log("isEnitySelectionSection  :", this.isEntitySelectionSection);
-        return this.translateService.instant('navigationControl.saveAndContinue');
-    }
-    
-    // Default button text for other pages
-    console.log("Returning default button text");
-    return this.translateService.instant(this.navMetaData?.nextButton?.buttonLabel || 'navigationControl.continueLabel');
 }
 
-// Update the shouldShowRasDownload method:
-shouldShowRasDownload(): boolean {
-    const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation');
-    const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties');
+private getRowKey(entityId: string, rowIdentifier: string): string {
+    return `${entityId}_${rowIdentifier}`;
+}
 
-    return isOnRatingRecommendationPage && 
-        !isOnSetupPage &&
-        this.isRasDocumentRequired && 
-        this.isRatingRecommendation && 
-        (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
-        !this.isDownloadStage;
+// Method to check if entity checkbox should be checked
+isEntityCheckboxChecked(entityId: string): boolean {
+    return this.entityCheckboxStates.get(entityId) || false;
+}
+
+// Method to check if row checkbox should be checked
+isRowCheckboxChecked(entityId: string, rowIdentifier: string): boolean {
+    const rowKey = this.getRowKey(entityId, rowIdentifier);
+    return this.rowCheckboxStates.get(rowKey) || false;
+}
+
+// Add this method to reset states when view changes
+private resetCheckboxStates() {
+    this.entityCheckboxStates.clear();
+    this.rowCheckboxStates.clear();
 }
