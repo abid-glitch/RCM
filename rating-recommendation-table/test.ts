@@ -31,9 +31,14 @@ onEntityTableCheckBoxSelected(
     if (checkBoxEvent.scope === BlueTableCheckboxScope.Row && entityDetails) {
         // Update the specific row's checked state
         const childRows = this.ratingRecommendation?.[0]?.children || [];
-        const targetRow = childRows.find(row => row.data.identifier === entityDetails.identifier);
+        const targetRow = childRows.find(row => 
+            row.data.identifier === entityDetails.identifier || 
+            row.data.id === entityDetails.id ||
+            JSON.stringify(row.data) === JSON.stringify(entityDetails)
+        );
         if (targetRow) {
-            targetRow.checked = checkBoxEvent.checked;
+            (targetRow as any).checked = checkBoxEvent.checked;
+            (targetRow as any).isSelected = checkBoxEvent.checked;
         }
         
         // Update parent checkbox state based on children
@@ -45,16 +50,21 @@ onEntityTableCheckBoxSelected(
         const childRows = this.ratingRecommendation?.[0]?.children || [];
         // Update all children to match parent state
         childRows.forEach(row => {
-            row.checked = checkBoxEvent.checked;
+            (row as any).checked = checkBoxEvent.checked;
+            (row as any).isSelected = checkBoxEvent.checked;
         });
         
         // Update parent state
         const parentRow = this.ratingRecommendation?.[0];
         if (parentRow) {
-            parentRow.checked = checkBoxEvent.checked;
-            parentRow.indeterminate = false;
+            (parentRow as any).checked = checkBoxEvent.checked;
+            (parentRow as any).indeterminate = false;
+            (parentRow as any).isSelected = checkBoxEvent.checked;
         }
     }
+
+    // Force change detection by creating a new reference
+    this.ratingRecommendation = [...this.ratingRecommendation];
 
     this.manageCheckboxSelected.next({
         [this.selectedTableView]: {
