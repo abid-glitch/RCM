@@ -67,7 +67,9 @@
                     "
                 >
                     <td blueTableCell [expanderRow]="row" [expanderLevel]="level">
-                        <input blueTableCheckbox (check)="onEntityTableCheckBoxSelected($event, row.data)" />
+                        <input blueTableCheckbox 
+                        [checked] = "isCheckboxSelected(row.data)"
+                        (check)="onEntityTableCheckBoxSelected($event, row.data)" />
                     </td>
                     <td blueTableCell [class.col-entity-is-figbanking]="isFigBanking">
                         <div *ngIf="level === 0" class="col-entity">
@@ -562,7 +564,10 @@
                     [ngClass]="{ 'merged-appearance': checkNextForSplitRating(index, row) }"
                 >
                     <td blueTableCell [expanderRow]="row" [expanderLevel]="level" class="col-rating-class-checkbox">
-                        <input blueTableCheckbox (check)="onEntityTableCheckBoxSelected($event, row.data)" />
+                        <input blueTableCheckbox 
+                        [checked] = "isCheckboxSelected(row.data)"
+
+                        (check)="onEntityTableCheckBoxSelected($event, row.data)" />
                     </td>
                     <td blueTableCell [attr.colspan]="selectedTableView === tableViewType.Class ? 4 : 1">
                         <div *ngIf="level === 0" class="col-entity">
