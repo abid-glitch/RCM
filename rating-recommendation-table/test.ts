@@ -1,48 +1,69 @@
-// Update the existing method
+// Complete fix for the checkbox synchronization bug
 onEntityTableCheckBoxSelected(
     checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
     entityDetails = null
 ) {
-    // Handle child checkbox changes
+    const childRows = this.ratingRecommendation?.[0]?.children || [];
+    const parentRow = this.ratingRecommendation?.[0];
+    
+    // Handle child checkbox changes (individual Class/Debt rows)
     if (checkBoxEvent.scope === BlueTableCheckboxScope.Row && entityDetails) {
         // Update the specific row's checked state
-        const childRows = this.ratingRecommendation?.[0]?.children || [];
         const targetRow = childRows.find(row => row.data.identifier === entityDetails.identifier);
         if (targetRow) {
+            targetRow.isSelected = checkBoxEvent.checked;
             (targetRow as any).checked = checkBoxEvent.checked;
         }
         
-        // Update parent checkbox state based on children
-        this.updateParentCheckboxState();
+        // Calculate new parent state
+        const checkedChildren = childRows.filter(row => row.isSelected === true);
+        let parentChecked = false;
+        let parentIndeterminate = false;
         
-        // Get the effective parent state after update
-        const parentState = this.getEffectiveParentState();
+        if (checkedChildren.length === 0) {
+            parentChecked = false;
+            parentIndeterminate = false;
+        } else if (checkedChildren.length === childRows.length) {
+            parentChecked = true;
+            parentIndeterminate = false;
+        } else {
+            parentChecked = false;
+            parentIndeterminate = true;
+        }
         
-        // Emit with the parent's effective state and scope as "All" to trigger proper parent handling
+        // Update parent checkbox state
+        if (parentRow) {
+            parentRow.isSelected = parentChecked;
+            (parentRow as any).checked = parentChecked;
+            (parentRow as any).indeterminate = parentIndeterminate;
+        }
+        
+        // Emit the event with parent's effective state
         this.manageCheckboxSelected.next({
             [this.selectedTableView]: {
                 blueTableData: this.selectedEntity.get(this.selectedTableView),
                 checkBoxEvent: {
-                    checked: parentState.checked,
+                    checked: parentChecked,
                     scope: BlueTableCheckboxScope.All
                 },
-                entityDetails: null // Set to null for parent-level changes
+                entityDetails: null
             } as SelectionDetails
         });
+        
         return;
     }
     
     // Handle parent checkbox changes (Entity Name/ID)
     if (checkBoxEvent.scope === BlueTableCheckboxScope.All) {
-        const childRows = this.ratingRecommendation?.[0]?.children || [];
         // Update all children to match parent state
         childRows.forEach(row => {
+            row.isSelected = checkBoxEvent.checked;
             (row as any).checked = checkBoxEvent.checked;
         });
         
         // Update parent state
-        const parentRow = this.ratingRecommendation?.[0];
         if (parentRow) {
+            parentRow.isSelected = checkBoxEvent.checked;
             (parentRow as any).checked = checkBoxEvent.checked;
             (parentRow as any).indeterminate = false;
         }
@@ -57,10 +78,11 @@ onEntityTableCheckBoxSelected(
     }
 }
 
-// Add this helper method to get the effective parent state
+// Remove the old updateParentCheckboxState method as it's now integrated above
+// and add this helper method if needed elsewhere
 private getEffectiveParentState(): { checked: boolean; indeterminate: boolean } {
     const childRows = this.ratingRecommendation?.[0]?.children || [];
-    const checkedChildren = childRows.filter(row => (row as any).checked === true);
+    const checkedChildren = childRows.filter(row => row.isSelected === true);
     
     if (checkedChildren.length === 0) {
         return { checked: false, indeterminate: false };
@@ -68,28 +90,5 @@ private getEffectiveParentState(): { checked: boolean; indeterminate: boolean } 
         return { checked: true, indeterminate: false };
     } else {
         return { checked: false, indeterminate: true };
-    }
-}
-
-// Update the existing method to handle indeterminate state properly
-private updateParentCheckboxState(): void {
-    const childRows = this.ratingRecommendation?.[0]?.children || [];
-    const checkedChildren = childRows.filter(row => (row as any).checked === true);
-    const parentRow = this.ratingRecommendation?.[0];
-    
-    if (parentRow) {
-        if (checkedChildren.length === 0) {
-            // No children checked - uncheck parent
-            (parentRow as any).checked = false;
-            (parentRow as any).indeterminate = false;
-        } else if (checkedChildren.length === childRows.length) {
-            // All children checked - check parent
-            (parentRow as any).checked = true;
-            (parentRow as any).indeterminate = false;
-        } else {
-            // Some children checked - set parent to indeterminate
-            (parentRow as any).checked = false;
-            (parentRow as any).indeterminate = true;
-        }
     }
 }
