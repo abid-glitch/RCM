@@ -1,22 +1,58 @@
-// Replace your existing checkbox methods with these updated versions:
+// Add this method to handle parent-child checkbox synchronization
+private updateParentCheckboxState(): void {
+    // Get all child checkboxes in the current table view
+    const childRows = this.ratingRecommendation?.[0]?.children || [];
+    const checkedChildren = childRows.filter(row => row.checked === true);
+    const parentRow = this.ratingRecommendation?.[0];
+    
+    if (parentRow) {
+        if (checkedChildren.length === 0) {
+            // No children checked - uncheck parent
+            parentRow.checked = false;
+            parentRow.indeterminate = false;
+        } else if (checkedChildren.length === childRows.length) {
+            // All children checked - check parent
+            parentRow.checked = true;
+            parentRow.indeterminate = false;
+        } else {
+            // Some children checked - set parent to indeterminate
+            parentRow.checked = false;
+            parentRow.indeterminate = true;
+        }
+    }
+}
 
+// Update the existing method
 onEntityTableCheckBoxSelected(
     checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
     entityDetails = null
 ) {
-    console.log('Checkbox event:', checkBoxEvent, 'Entity details:', entityDetails);
-    
-    if (entityDetails) {
-        const key = this.getCheckboxKey(entityDetails);
-        this.checkboxStates.set(key, checkBoxEvent.checked);
+    // Handle child checkbox changes
+    if (checkBoxEvent.scope === BlueTableCheckboxScope.Row && entityDetails) {
+        // Update the specific row's checked state
+        const childRows = this.ratingRecommendation?.[0]?.children || [];
+        const targetRow = childRows.find(row => row.data.identifier === entityDetails.identifier);
+        if (targetRow) {
+            targetRow.checked = checkBoxEvent.checked;
+        }
         
-        // Handle parent-child relationship logic
-        if (entityDetails.immediateParent) {
-            // This is a child row - update parent based on all children
-            this.updateParentCheckbox(entityDetails.immediateParent.id);
-        } else {
-            // This is a parent entity - update all children to match parent state
-            this.updateChildrenCheckboxes(entityDetails.id, checkBoxEvent.checked);
+        // Update parent checkbox state based on children
+        this.updateParentCheckboxState();
+    }
+    
+    // Handle parent checkbox changes (Entity Name/ID)
+    if (checkBoxEvent.scope === BlueTableCheckboxScope.All) {
+        const childRows = this.ratingRecommendation?.[0]?.children || [];
+        // Update all children to match parent state
+        childRows.forEach(row => {
+            row.checked = checkBoxEvent.checked;
+        });
+        
+        // Update parent state
+        const parentRow = this.ratingRecommendation?.[0];
+        if (parentRow) {
+            parentRow.checked = checkBoxEvent.checked;
+            parentRow.indeterminate = false;
         }
     }
 
@@ -29,84 +65,21 @@ onEntityTableCheckBoxSelected(
     });
 }
 
-private getCheckboxKey(entityDetails: any): string {
-    if (entityDetails.immediateParent) {
-        // This is a child row
-        return `${entityDetails.immediateParent.id}_${entityDetails.identifier}`;
-    } else {
-        // This is a parent entity
-        return `entity_${entityDetails.id}`;
-    }
-}
-
-private updateParentCheckbox(parentId: string) {
-    // Get all child checkboxes for this parent
-    const childKeys = Array.from(this.checkboxStates.keys()).filter(key => 
-        key.startsWith(`${parentId}_`)
-    );
-    
-    // Check if ANY child is selected
-    const hasSelectedChild = childKeys.some(key => this.checkboxStates.get(key));
-    
-    // Update parent checkbox state
-    const parentKey = `entity_${parentId}`;
-    const previousParentState = this.checkboxStates.get(parentKey);
-    
-    // Only update if the state actually changed
-    if (previousParentState !== hasSelectedChild) {
-        this.checkboxStates.set(parentKey, hasSelectedChild);
-        console.log('Updated parent checkbox:', parentKey, hasSelectedChild);
+// Also update the emitSelectedEntities method to handle the state properly
+private emitSelectedEntities(checkboxSelected: SelectedRatingRecommendationEntities) {
+    if (checkboxSelected) {
+        // Update the table data to reflect current checkbox states
+        this.updatedRatingRecommendation.emit(this.ratingRecommendation);
         
-        // Trigger UI update for parent checkbox if needed
-        // You might need to emit an event or trigger change detection here
-        // depending on how your UI binds to the checkbox states
+        const selectedEntities: SelectedRatingRecommendationEntities = {
+            [this.selectedTableView]: {
+                ...checkboxSelected[this.selectedTableView],
+                blueTableData: this.selectedEntity.get(this.selectedTableView)
+            }
+        };
+
+        this.selectedEntityChanged.emit({
+            ...selectedEntities
+        });
     }
-}
-
-private updateChildrenCheckboxes(parentId: string, checked: boolean) {
-    // When parent is selected/deselected, update all children to match
-    const childKeys = Array.from(this.checkboxStates.keys()).filter(key => 
-        key.startsWith(`${parentId}_`)
-    );
-    
-    childKeys.forEach(key => {
-        this.checkboxStates.set(key, checked);
-    });
-    
-    console.log('Updated children checkboxes for parent:', parentId, 'to:', checked);
-}
-
-// Method to check if checkbox should be selected
-isCheckboxSelected(entityDetails: any): boolean {
-    const key = this.getCheckboxKey(entityDetails);
-    return this.checkboxStates.get(key) || false;
-}
-
-// Additional helper method to get all selected entities
-getSelectedEntities(): string[] {
-    const selectedKeys: string[] = [];
-    this.checkboxStates.forEach((isSelected, key) => {
-        if (isSelected) {
-            selectedKeys.push(key);
-        }
-    });
-    return selectedKeys;
-}
-
-// Method to clear all selections
-clearAllSelections(): void {
-    this.checkboxStates.clear();
-    console.log('All checkboxes cleared');
-}
-
-// Method to check if parent has all children selected (for indeterminate state)
-isParentIndeterminate(parentId: string): boolean {
-    const childKeys = Array.from(this.checkboxStates.keys()).filter(key => 
-        key.startsWith(`${parentId}_`)
-    );
-    
-    if (childKeys.length === 0) return false;
-    
-    const selectedChildren = childKeys.filter(key => this.checkboxStates.get(key));
-    return selectedChildren.length > 0 && selectedChildren.length < childKeys.length;
 }
