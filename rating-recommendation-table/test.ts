@@ -14,6 +14,22 @@ onEntityTableCheckBoxSelected(
         
         // Update parent checkbox state based on children
         this.updateParentCheckboxState();
+        
+        // Get the effective parent state after update
+        const parentState = this.getEffectiveParentState();
+        
+        // Emit with the parent's effective state and scope as "All" to trigger proper parent handling
+        this.manageCheckboxSelected.next({
+            [this.selectedTableView]: {
+                blueTableData: this.selectedEntity.get(this.selectedTableView),
+                checkBoxEvent: {
+                    checked: parentState.checked,
+                    scope: BlueTableCheckboxScope.All
+                },
+                entityDetails: null // Set to null for parent-level changes
+            } as SelectionDetails
+        });
+        return;
     }
     
     // Handle parent checkbox changes (Entity Name/ID)
@@ -30,18 +46,15 @@ onEntityTableCheckBoxSelected(
             (parentRow as any).checked = checkBoxEvent.checked;
             (parentRow as any).indeterminate = false;
         }
+        
+        this.manageCheckboxSelected.next({
+            [this.selectedTableView]: {
+                blueTableData: this.selectedEntity.get(this.selectedTableView),
+                checkBoxEvent: checkBoxEvent,
+                entityDetails: entityDetails
+            } as SelectionDetails
+        });
     }
-
-    this.manageCheckboxSelected.next({
-        [this.selectedTableView]: {
-            blueTableData: this.selectedEntity.get(this.selectedTableView),
-            checkBoxEvent: {
-                checked: this.getEffectiveParentState().checked,
-                scope: checkBoxEvent.scope
-            },
-            entityDetails: entityDetails
-        } as SelectionDetails
-    });
 }
 
 // Add this helper method to get the effective parent state
