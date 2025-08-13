@@ -77,12 +77,10 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
     readonly checkboxScope = BlueTableCheckboxScope;
     readonly inputTypes = RecommendationInputTypes;
     readonly reviewStatus = RecommendationInputTypes.REVIEW_STATUS;
-    // private entityCheckboxStates = new Map<string, boolean>()
-    // private rowCheckboxStates = new Map<string, boolean>()
-        // Add this property to track checkbox states
-checkboxStates = new Map<string, boolean>();
 
-
+    // Enhanced checkbox state tracking
+    checkboxStates = new Map<string, boolean>();
+    parentChildMapping = new Map<string, string[]>(); // parentId -> [childIds]
 
     readonly popoverEvent = BluePopoverEvent;
     readonly removeIcon: BlueInputConst<typeof BlueIconName> = 'trash';
@@ -130,11 +128,31 @@ checkboxStates = new Map<string, boolean>();
 
     ngOnInit(): void {
         this.initCheckboxActionObservable();
+        this.initializeParentChildMapping();
     }
 
     ngAfterViewInit(): void {
         this.initializeSelected();
         this.initializeSelectedDebtView = true;
+    }
+
+    // Initialize parent-child relationships for checkbox management
+    private initializeParentChildMapping(): void {
+        if (this.ratingRecommendation && this.ratingRecommendation.length > 0) {
+            this.ratingRecommendation.forEach(entity => {
+                if (entity.children && entity.children.length > 0) {
+                    const parentId = entity.id || entity.data?.id;
+                    const childIds = entity.children.map(child => 
+                        this.getChildIdentifier(parentId, child)
+                    );
+                    this.parentChildMapping.set(parentId, childIds);
+                }
+            });
+        }
+    }
+
+    private getChildIdentifier(parentId: string, child: any): string {
+        return `${parentId}_${child.identifier || child.id || child.data?.identifier}`;
     }
 
     // change to updateRecommendation
@@ -152,79 +170,111 @@ checkboxStates = new Map<string, boolean>();
         this.manageInitialDebtViewSync();
     }
 
-    // onEntityTableCheckBoxSelected(
-    //     checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
-    //     entityDetails = null
-    // ) {
-    //     this.manageCheckboxSelected.next({
-    //         [this.selectedTableView]: {
-    //             blueTableData: this.selectedEntity.get(this.selectedTableView),
-    //             checkBoxEvent: checkBoxEvent,
-    //             entityDetails: entityDetails
-    //         } as SelectionDetails
-    //     });
-    // }
-
-
-
-// Replace your onEntityTableCheckBoxSelected method:
-onEntityTableCheckBoxSelected(
-    checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
-    entityDetails = null
-) {
-    console.log('Checkbox event:', checkBoxEvent, 'Entity details:', entityDetails);
-    
-    if (entityDetails) {
-        const key = this.getCheckboxKey(entityDetails);
-        this.checkboxStates.set(key, checkBoxEvent.checked);
+    // Enhanced checkbox selection handler with proper parent-child sync
+    onEntityTableCheckBoxSelected(
+        checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
+        entityDetails = null
+    ) {
+        console.log('Checkbox event:', checkBoxEvent, 'Entity details:', entityDetails);
         
-        // If this is a child row, update parent
+        if (entityDetails) {
+            const isParent = !entityDetails.immediateParent;
+            
+            if (isParent) {
+                // Handle parent checkbox selection
+                this.handleParentCheckboxSelection(entityDetails, checkBoxEvent.checked);
+            } else {
+                // Handle child checkbox selection
+                this.handleChildCheckboxSelection(entityDetails, checkBoxEvent.checked);
+            }
+        }
+
+        this.manageCheckboxSelected.next({
+            [this.selectedTableView]: {
+                blueTableData: this.selectedEntity.get(this.selectedTableView),
+                checkBoxEvent: checkBoxEvent,
+                entityDetails: entityDetails
+            } as SelectionDetails
+        });
+    }
+
+    private handleParentCheckboxSelection(entityDetails: any, isChecked: boolean): void {
+        const parentKey = this.getCheckboxKey(entityDetails);
+        this.checkboxStates.set(parentKey, isChecked);
+
+        // Update all children of this parent
+        const parentId = entityDetails.id;
+        const childIds = this.parentChildMapping.get(parentId) || [];
+        
+        childIds.forEach(childId => {
+            this.checkboxStates.set(childId, isChecked);
+        });
+
+        console.log('Parent selection updated:', parentKey, isChecked, 'Children updated:', childIds);
+    }
+
+    private handleChildCheckboxSelection(entityDetails: any, isChecked: boolean): void {
+        const childKey = this.getCheckboxKey(entityDetails);
+        this.checkboxStates.set(childKey, isChecked);
+
+        // Update parent checkbox based on children states
+        const parentId = entityDetails.immediateParent.id;
+        this.updateParentCheckboxBasedOnChildren(parentId);
+
+        console.log('Child selection updated:', childKey, isChecked);
+    }
+
+    private updateParentCheckboxBasedOnChildren(parentId: string): void {
+        const childIds = this.parentChildMapping.get(parentId) || [];
+        
+        // Check if any child is selected
+        const hasSelectedChild = childIds.some(childId => 
+            this.checkboxStates.get(childId) === true
+        );
+        
+        // Update parent checkbox state
+        const parentKey = `entity_${parentId}`;
+        this.checkboxStates.set(parentKey, hasSelectedChild);
+        
+        console.log('Updated parent checkbox based on children:', parentKey, hasSelectedChild);
+    }
+
+    private getCheckboxKey(entityDetails: any): string {
         if (entityDetails.immediateParent) {
-            this.updateParentCheckbox(entityDetails.immediateParent.id);
+            // This is a child row
+            return `${entityDetails.immediateParent.id}_${entityDetails.identifier || entityDetails.id}`;
+        } else {
+            // This is a parent entity
+            return `entity_${entityDetails.id}`;
         }
     }
 
-    this.manageCheckboxSelected.next({
-        [this.selectedTableView]: {
-            blueTableData: this.selectedEntity.get(this.selectedTableView),
-            checkBoxEvent: checkBoxEvent,
-            entityDetails: entityDetails
-        } as SelectionDetails
-    });
-}
-
-private getCheckboxKey(entityDetails: any): string {
-    if (entityDetails.immediateParent) {
-        // This is a child row
-        return `${entityDetails.immediateParent.id}_${entityDetails.identifier}`;
-    } else {
-        // This is a parent entity
-        return `entity_${entityDetails.id}`;
+    // Method to check if checkbox should be selected
+    isCheckboxSelected(entityDetails: any): boolean {
+        const key = this.getCheckboxKey(entityDetails);
+        return this.checkboxStates.get(key) || false;
     }
-}
 
-private updateParentCheckbox(parentId: string) {
-    // Get all child checkboxes for this parent
-    const childKeys = Array.from(this.checkboxStates.keys()).filter(key => 
-        key.startsWith(`${parentId}_`)
-    );
-    
-    // Check if any child is selected
-    const hasSelectedChild = childKeys.some(key => this.checkboxStates.get(key));
-    
-    // Update parent checkbox state
-    const parentKey = `entity_${parentId}`;
-    this.checkboxStates.set(parentKey, hasSelectedChild);
-    
-    console.log('Updated parent checkbox:', parentKey, hasSelectedChild);
-}
+    // Method to check if parent checkbox should be indeterminate
+    isParentIndeterminate(entityDetails: any): boolean {
+        if (entityDetails.immediateParent) {
+            return false; // Children can't be indeterminate
+        }
 
-// Method to check if checkbox should be selected
-isCheckboxSelected(entityDetails: any): boolean {
-    const key = this.getCheckboxKey(entityDetails);
-    return this.checkboxStates.get(key) || false;
-}
+        const parentId = entityDetails.id;
+        const childIds = this.parentChildMapping.get(parentId) || [];
+        
+        if (childIds.length === 0) {
+            return false;
+        }
 
+        const selectedChildren = childIds.filter(childId => 
+            this.checkboxStates.get(childId) === true
+        );
+
+        // Indeterminate if some but not all children are selected
+        return selectedChildren.length > 0 && selectedChildren.length < childIds.length;
+    }
 
     private initCheckboxActionObservable(): void {
         this.manageCheckboxSelected
