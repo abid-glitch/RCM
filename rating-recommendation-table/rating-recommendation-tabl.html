@@ -68,7 +68,6 @@
                 >
                     <td blueTableCell [expanderRow]="row" [expanderLevel]="level">
                         <input blueTableCheckbox 
-                        [checked] = "isCheckboxSelected(row.data)"
                         (check)="onEntityTableCheckBoxSelected($event, row.data)" />
                     </td>
                     <td blueTableCell [class.col-entity-is-figbanking]="isFigBanking">
@@ -565,7 +564,6 @@
                 >
                     <td blueTableCell [expanderRow]="row" [expanderLevel]="level" class="col-rating-class-checkbox">
                         <input blueTableCheckbox 
-                        [checked] = "isCheckboxSelected(row.data)"
 
                         (check)="onEntityTableCheckBoxSelected($event, row.data)" />
                     </td>
