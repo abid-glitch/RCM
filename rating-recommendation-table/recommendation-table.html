@@ -1,4 +1,4 @@
-<section class="table-container">
+<section class="table-container" *ngIf="showTable">
     <blue-table
         [data]="ratingRecommendation"
         [includeIndeterminateInSelect]="false"
@@ -8,7 +8,7 @@
         <ng-template blueTemplate="header">
             <tr blueTableRow>
                 <th blueTableHeaderCell class="header-checkbox" colspan="1" scope="col">
-                   A <input
+                    <input
                         [attr.data-testid]="'selectAllRatingRecommendation_' + selectedTableView"
                         blueTableCheckbox
                         (check)="onEntityTableCheckBoxSelected($event)"
@@ -67,7 +67,7 @@
                     "
                 >
                     <td blueTableCell [expanderRow]="row" [expanderLevel]="level">
-                       B <input blueTableCheckbox (check)="onEntityTableCheckBoxSelected($event, row.data)" />
+                        <input blueTableCheckbox (check)="onEntityTableCheckBoxSelected($event, row.data)" />
                     </td>
                     <td blueTableCell [class.col-entity-is-figbanking]="isFigBanking">
                         <div *ngIf="level === 0" class="col-entity">
@@ -181,25 +181,36 @@
                         <td blueTableCell>
                             <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
                                 <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                    <span [formGroupName]="row.data.identifier">
-                                        C <input
-                                            blueInput
-                                            type="text"
-                                            formControlName="name"
-                                            [ngClass]="{
-                                                'override-required-bg':
-                                                    row.isSelected &&
-                                                    continueClicked &&
-                                                    !debtForm.value[row.data.identifier].name
-                                            }"
-                                        />
-                                    </span>
+                                    <ng-container
+                                        *ngIf="debtForm.value[row.data.identifier]?.editMode; else descriptionViewMode"
+                                    >
+                                        <span [formGroupName]="row.data.identifier">
+                                            <input
+                                                blueInput
+                                                type="text"
+                                                formControlName="name"
+                                                [ngClass]="{
+                                                    'override-required-bg':
+                                                        ((row.isSelected && continueClicked) ||
+                                                            debtForm.value[row.data.identifier].showError) &&
+                                                        !debtForm.value[row.data.identifier].name
+                                                }"
+                                            />
+                                        </span>
+                                    </ng-container>
+                                    <ng-template #descriptionViewMode>
+                                        {{
+                                            debtForm.value[row.data.identifier]?.name
+                                                ? debtForm.value[row.data.identifier]?.name
+                                                : '-'
+                                        }}
+                                    </ng-template>
 
                                     <div
                                         class="required-error"
                                         *ngIf="
-                                            row.isSelected &&
-                                            continueClicked &&
+                                            ((row.isSelected && continueClicked) ||
+                                                debtForm.value[row.data.identifier].showError) &&
                                             !debtForm.value[row.data.identifier].name
                                         "
                                     >
@@ -288,11 +299,27 @@
                             >
                                 <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
                                     <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                        <span [formGroupName]="row.data.identifier" class="custom-debt-face-value">
-                                           D <input blueInput type="number" formControlName="originalFaceAmount" />
+                                        <ng-container
+                                            *ngIf="
+                                                debtForm.value[row.data.identifier]?.editMode;
+                                                else originalFaceAmountViewMode
+                                            "
+                                        >
+                                            <span [formGroupName]="row.data.identifier" class="custom-debt-face-value">
+                                                <input blueInput type="number" formControlName="originalFaceAmount" />
 
-                                            <span class="text">{{ 'ratingRecommendation.mil' | translate }}</span>
-                                        </span>
+                                                <span class="text">{{ 'ratingRecommendation.mil' | translate }}</span>
+                                            </span>
+                                        </ng-container>
+                                        <ng-template #originalFaceAmountViewMode>
+                                            {{
+                                                debtForm.value[row.data.identifier]?.originalFaceAmount
+                                                    ? debtForm.value[row.data.identifier]?.originalFaceAmount +
+                                                      ' ' +
+                                                      ('ratingRecommendation.mil' | translate)
+                                                    : '-'
+                                            }}
+                                        </ng-template>
                                     </span>
                                 </ng-container>
                             </td>
@@ -304,14 +331,29 @@
                             >
                                 <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
                                     <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                        <span [formGroupName]="row.data.identifier">
-                                            <blue-datepicker
-                                                formControlName="maturityDate"
-                                                autocomplete="off"
-                                                [pickOnly]="true"
-                                                [min]="minMaturityDate"
-                                            ></blue-datepicker>
-                                        </span>
+                                        <ng-container
+                                            *ngIf="
+                                                debtForm.value[row.data.identifier]?.editMode;
+                                                else maturityDateViewMode
+                                            "
+                                        >
+                                            <span [formGroupName]="row.data.identifier">
+                                                <blue-datepicker
+                                                    formControlName="maturityDate"
+                                                    autocomplete="off"
+                                                    [pickOnly]="true"
+                                                    [min]="minMaturityDate"
+                                                ></blue-datepicker>
+                                            </span>
+                                        </ng-container>
+                                        <ng-template #maturityDateViewMode>
+                                            {{
+                                                debtForm.value[row.data.identifier]?.maturityDate
+                                                    ? (debtForm.value[row.data.identifier]?.maturityDate
+                                                      | date : 'dd MMM yyyy')
+                                                    : '-'
+                                            }}
+                                        </ng-template>
                                     </span>
                                 </ng-container>
                             </td>
@@ -322,9 +364,23 @@
                             >
                                 <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
                                     <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                        <span [formGroupName]="row.data.identifier">
-                                           E <input blueInput type="text" formControlName="currencyCode" />
-                                        </span>
+                                        <ng-container
+                                            *ngIf="
+                                                debtForm.value[row.data.identifier]?.editMode;
+                                                else currencyCodeViewMode
+                                            "
+                                        >
+                                            <span [formGroupName]="row.data.identifier">
+                                                <input blueInput type="text" formControlName="currencyCode" />
+                                            </span>
+                                        </ng-container>
+                                        <ng-template #currencyCodeViewMode>
+                                            {{
+                                                debtForm.value[row.data.identifier]?.currencyCode
+                                                    ? debtForm.value[row.data.identifier]?.currencyCode
+                                                    : '-'
+                                            }}
+                                        </ng-template>
                                     </span>
                                 </ng-container>
                             </td>
@@ -364,11 +420,30 @@
                             </span>
                         </td>
                     </ng-container>
-
-                    <td blueTableCell>
+                    <td blueTableCell class="td-debt-class-edit">
+                        <div
+                            *ngIf="row.data.added && debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName"
+                        >
+                            <button
+                                blueButton
+                                theme="link"
+                                (click)="changeMode(row.data.identifier)"
+                                [attr.data-testid]="
+                                    'custom_debt_btn' +
+                                    (debtForm.value[row.data.identifier]?.editMode ? 'check' : 'pencil')
+                                "
+                            >
+                                <svg
+                                    blueIcon="{{ debtForm.value[row.data.identifier]?.editMode ? 'check' : 'pencil' }}"
+                                    class="icon"
+                                ></svg>
+                            </button>
+                        </div>
+                    </td>
+                    <td blueTableCell class="td-debt-class-delete">
                         <div class="debt-class-delete" *ngIf="row.data.added">
-                            <button blueButton theme="secondary" (click)="onDebtRemoved(row.data?.identifier)">
-                                <svg [blueIcon]="removeIcon" class="icon-sm"></svg>
+                            <button blueButton theme="link" (click)="onDebtRemoved(row.data?.identifier)">
+                                <svg [blueIcon]="removeIcon" class="icon"></svg>
                             </button>
                         </div>
                     </td>
@@ -477,7 +552,13 @@
                                 recommendationsDropdownOptionMapping
                             "
                             [isReviewStatus]="true"
-                            [isSelected]="row.isSelected"
+                            [isSelected]="
+                                !row.data.added ||
+                                (debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName &&
+                                    customDebtsState[row.data.identifier]?.loading === false)
+                                    ? row.isSelected
+                                    : false
+                            "
                             [ratings]="row.data"
                             (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
                             [recommendationOption]="
@@ -512,12 +593,12 @@
 
                     <ng-container *ngIf="!isFigBanking">
                         <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.maturity' | translate }}</td>
-                        <td blueTableHeaderCell colspan="2">
+                        <td blueTableHeaderCell colspan="3">
                             {{ 'ratingRecommendation.tableHeaders.currency' | translate }}
                         </td>
                     </ng-container>
                     <ng-container *ngIf="isFigBanking">
-                        <td blueTableHeaderCell colspan="2">
+                        <td blueTableHeaderCell colspan="3">
                             {{ 'ratingRecommendation.tableHeaders.maturityCurrency' | translate }}
                         </td>
                     </ng-container>
@@ -562,7 +643,7 @@
                     [ngClass]="{ 'merged-appearance': checkNextForSplitRating(index, row) }"
                 >
                     <td blueTableCell [expanderRow]="row" [expanderLevel]="level" class="col-rating-class-checkbox">
-                      F  <input blueTableCheckbox (check)="onEntityTableCheckBoxSelected($event, row.data)" />
+                        <input blueTableCheckbox (check)="onEntityTableCheckBoxSelected($event, row.data)" />
                     </td>
                     <td blueTableCell [attr.colspan]="selectedTableView === tableViewType.Class ? 4 : 1">
                         <div *ngIf="level === 0" class="col-entity">
@@ -741,9 +822,7 @@
                     <td
                         blueTableCell
                         class="data-cell-center recommendations col-recommendation--rating"
-                        *ngIf="
-                            isFigBanking && row.data?.recommendationInputType !== inputTypes.OUTLOOK
-                        "
+                        *ngIf="isFigBanking && row.data?.recommendationInputType !== inputTypes.OUTLOOK"
                     >
                         <app-recommendation
                             *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
@@ -804,7 +883,7 @@
                 </tr>
 
                 <tr [blueTableRow]="row" *ngIf="row.data?.isSubTableHeader">
-                    <td blueTableHeaderCell></td>
+                    <td blueTableHeaderCell>F<input blueTableCheckbox /></td>
                     <td blueTableHeaderCell [attr.colspan]="4">
                         {{ 'ratingRecommendation.tableHeaders.classOrDebt' | translate }}
                     </td>
