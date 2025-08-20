@@ -1,6 +1,7 @@
 import {
     AfterViewInit,
     ChangeDetectionStrategy,
+    ChangeDetectorRef,
     Component,
     EventEmitter,
     Input,
@@ -46,7 +47,7 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
     readonly defaultColSpanEntityNameOrIDDebtView = 2;
 
     readonly defaultColSpanCurrentClassView = 5;
-    readonly defaultColSpanCurrentDebtView = 6;
+    readonly defaultColSpanCurrentDebtView = 7;
 
     readonly defaultColSpanViewFig = 5;
 
@@ -55,6 +56,7 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
     @Input() recommendationsDropdownOptionMapping!: RecommendationDropDownOption;
     @Input() isFigBanking!: boolean;
     @Input() continueClicked = false;
+    showTable = true;
     @Input() customRatingClassesState: Record<string, CustomRatingClassState>;
     private _customRatingClasses: CustomRatingClass[] = [];
     @Input()
@@ -111,7 +113,7 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
 
     readonly minMaturityDate: Date = new Date(new Date().setHours(0, 0, 0, 0));
 
-    constructor(private readonly _formBuilder: FormBuilder, private readonly datePipe: LocalizedDatePipe) {
+    constructor(private readonly _formBuilder: FormBuilder, private readonly datePipe: LocalizedDatePipe, private readonly _cdr: ChangeDetectorRef) {
         this.ratingClassForm = this._formBuilder.group({});
         this._initializeCustomRatingClassFormChanges();
 
@@ -150,6 +152,53 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
         checkBoxEvent: { checked: boolean; scope: BlueTableCheckboxScope },
         entityDetails = null
     ) {
+        if (entityDetails) {
+            // Find the child entity that matches the checkbox event and update its selection state
+            this.ratingRecommendation.forEach((entity) => {
+                const child = entity.children.find(
+                    (child) =>
+                        child.data.name === entityDetails.name &&
+                        child.data.identifier === entityDetails.identifier &&
+                        child.data.recommendationInputType === entityDetails.recommendationInputType
+                );
+                if (child) {
+                    child.isSelected = checkBoxEvent.checked;
+                }
+            });
+        } else if (checkBoxEvent.scope === 'all') {
+            this.ratingRecommendation.forEach((entity) => {
+                entity.children.forEach((child) => {
+                    child.isSelected = checkBoxEvent.checked;
+                });
+            });
+        }
+
+        this.ratingRecommendation.forEach((entity) => {
+                entity.children.forEach((child) => {
+                    child.isSelected = checkBoxEvent.checked;
+                    // child.isSelected = false;
+                    // console.log(child.data.isSelectable);  
+                    
+                });
+            });
+            this.showTable = false;
+            this._cdr.detectChanges();
+            setTimeout(() => {
+                this.ratingRecommendation.forEach((entity) => {
+                entity.children.forEach((child) => {
+                    child.isSelected = checkBoxEvent.checked;
+                    child.isSelected = false;
+                    console.log(child.data.isSelectable);  
+                    
+                });
+            });
+                this.showTable = true;
+                this._cdr.detectChanges();
+                console.log('test',this.showTable,this.ratingRecommendation);
+            }, 2000);
+
+        this.updatedRatingRecommendation.emit(this.ratingRecommendation);
+
         this.manageCheckboxSelected.next({
             [this.selectedTableView]: {
                 blueTableData: this.selectedEntity.get(this.selectedTableView),
@@ -232,7 +281,9 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
                 name: name,
                 originalFaceAmount: originalFaceAmount,
                 currencyCode: currencyCode,
-                maturityDate: maturityDate ? new Date(maturityDate) : null
+                maturityDate: maturityDate ? new Date(maturityDate) : null,
+                editMode: !name,
+                showError: false
             });
             this.debtForm.addControl(identifier, formGorup);
 
@@ -244,6 +295,17 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
                     formGorup.get('ratingClass').setValue(lookup);
                 }
             }
+        }
+    }
+
+    changeMode(identifier: string) {
+        const debtFormGroup = this.getDebtFormGroup(identifier);
+        if (debtFormGroup) {
+            if (!debtFormGroup.value.name) {
+                debtFormGroup.get('showError').setValue(true, { emitEvent: false });
+                return;
+            }
+            debtFormGroup.get('editMode').setValue(!debtFormGroup.get('editMode').value, { emitEvent: false });
         }
     }
 
@@ -343,6 +405,11 @@ export class RecommendationTableComponent implements OnInit, OnDestroy, AfterVie
 
         if (maturityDate) {
             maturityDate = this.datePipe.transform(new Date(maturityDate).toISOString(), 'YYYY-MM-dd');
+        }
+
+        if (name) {
+            const debtFormGroup = this.getDebtFormGroup(identifier);
+            debtFormGroup.get('showError').setValue(false, { emitEvent: false });
         }
 
         this.debtChanged.emit({
