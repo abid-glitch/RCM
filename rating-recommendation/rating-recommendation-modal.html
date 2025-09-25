@@ -1,0 +1,99 @@
+<blue-modal windowSize="sm" [ref]="modalRef">
+    <ng-container blueContent="title">
+        {{ 'worklist.saveAndDownloadModal.title' | translate }}
+    </ng-container>
+    <ng-container blueContent="utils">
+        <button blueButton class="button-link" (click)="onCancel()" [attr.data-testid]="'closeModal'">
+            <svg blueIcon="x" class="icon"></svg>
+        </button>
+    </ng-container>
+    <form [formGroup]="form">
+        <div class="alert-info">
+            <div class="alert-info-icon">
+                <svg blueIcon="alert-triangle" class="icon-md"></svg>
+            </div>
+            <div class="alert-info-text">
+                {{ 'worklist.saveAndDownloadModal.alertNote' | translate }}
+            </div>
+        </div>
+        <div class="content">
+            <div class="left">
+                <div class="question">{{ 'worklist.saveAndDownloadModal.chooseDocumentsToDownload' | translate }}</div>
+
+                <blue-field
+                    [label]="'worklist.saveAndDownloadModal.actionRequestForm' | translate"
+                    [for]="'actionRequestForm'"
+                    [labelPosition]="'after'"
+                    [inline]="true"
+                >
+                    <input formControlName="actionRequestForm" blueCheckbox id="actionRequestForm" type="checkbox" />
+                </blue-field>
+                <blue-field
+                    [label]="'worklist.saveAndDownloadModal.rcmCoverPage' | translate"
+                    [for]="'rcmCoverPage'"
+                    [labelPosition]="'after'"
+                    [inline]="true"
+                >
+                    <input formControlName="rcmCoverPage" blueCheckbox id="rcmCoverPage" type="checkbox" />
+                </blue-field>
+                <blue-field
+                    [label]="'worklist.saveAndDownloadModal.rcmAnalytical' | translate"
+                    [for]="'rcmAnalytical'"
+                    [labelPosition]="'after'"
+                    [inline]="true"
+                >
+                    <input formControlName="rcmAnalytical" blueCheckbox id="rcmAnalytical" type="checkbox" />
+                </blue-field>
+            </div>
+            <div class="right" *ngIf="form.value.actionRequestForm || form.value.rcmCoverPage">
+                <div class="question">{{ 'worklist.saveAndDownloadModal.question' | translate }}</div>
+                <div class="debt-information-option" *ngFor="let radio of debtInformationRadioOptions; index as i">
+                    <blue-field [label]="radio.label" [for]="radio.name + i" [labelPosition]="'after'" [inline]="true">
+                        <input
+                            blueRadio
+                            type="radio"
+                            formControlName="debtInformation"
+                            [id]="radio.name + i"
+                            [attr.data-testid]="radio.name + i"
+                            [value]="radio.value"
+                        />
+                    </blue-field>
+                    <div
+                        class="debt-information-option-icon"
+                        *ngIf="
+                            (radio.value === debtInformationTypeEnum.ratingClass &&
+                                modalRef.context.viewTable === ratingRecommendationTableViewEnum.Debt) ||
+                            (radio.value === debtInformationTypeEnum.instrument &&
+                                modalRef.context.viewTable === ratingRecommendationTableViewEnum.Class)
+                        "
+                    >
+                        <svg
+                            blueIcon="help-circle"
+                            blueTooltip="{{
+                                (modalRef.context.viewTable === ratingRecommendationTableViewEnum.Debt
+                                    ? 'worklist.saveAndDownloadModal.tooltip.classView'
+                                    : 'worklist.saveAndDownloadModal.tooltip.debtView'
+                                ) | translate
+                            }}"
+                        ></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <ng-container blueContent="footer-end">
+            <div class="buttons">
+                <button blueButton class="button-link mr-1" (click)="onCancel()" [attr.data-testid]="'cancelDownload'">
+                    {{ 'worklist.saveAndDownloadModal.cancel' | translate }}
+                </button>
+                <button
+                    blueButton
+                    (click)="onSave()"
+                    [attr.data-testid]="'saveAndDownload'"
+                    [disabled]="!form.value.actionRequestForm && !form.value.rcmCoverPage && !form.value.rcmAnalytical"
+                >
+                    {{ 'worklist.saveAndDownloadModal.save' | translate }}
+                </button>
+            </div>
+        </ng-container>
+    </form>
+</blue-modal>
