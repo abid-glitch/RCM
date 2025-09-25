@@ -26,7 +26,7 @@ import { JapanesePRDisclosure } from '../../models/JapanesePRDisclosure';
 import { RatingTemplate } from '../../models/RatingTemplate';
 import { GenerationService } from '../../services/document-generation.service';
 import { RatingGroupType } from '../../models/RatingGroupType';
-import { BehaviorSubject, combineLatest, Observable, ReplaySubject, Subject } from 'rxjs';
+import { BehaviorSubject, combineLatest, Observable, ReplaySubject, Subject, Subscription } from 'rxjs';
 import { RatingRecommendationSaveAndDownloadModalComponent } from 'src/app/features/rating-recommendation-save-and-download-modal/rating-recommendation-save-and-download-modal.component';
 import { ProcessFlowDataManager } from './helpers/processFlowDataManager';
 import { NotificationsService } from 'src/app/core/services/notifications.service';
@@ -39,12 +39,14 @@ import { CommitteeSupport } from '@app/shared/models/CommitteeSupport';
 import { Rating, SelectedRatingRecommendationEntities } from '@app/features/rating-recommendation';
 import { CommitteeParticipantService } from '@app/participants/repository/services/committee-participant.service';
 import { Invitees } from '@app/participants/models/invitees';
-import { NavigationEnd, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { ConflictStatus } from '@app/committee-package/shared/enums/conflict-status';
 import _ from 'lodash';
 import { RatingRecommendationSaveAndDownloadConfig } from '@app/shared/models/RatingRecommendationSaveAndDownloadConfig';
 import { DebtInformationType } from '@app/shared/models/DebtInfomation';
 import { HttpResponse } from '@angular/common/http';
+import { RatingViewType } from '@app/rating-recommendation/enums/entity-rating-type.enum';
+import { getRatingGroupTemplate } from '@app/worklist/mappers/case.mapper';
 
 @Component({
     selector: 'app-bottom-navbar',
@@ -54,7 +56,7 @@ import { HttpResponse } from '@angular/common/http';
 export class BottomNavbarComponent extends ProcessFlowDataManager implements OnInit, OnDestroy, OnDestroy {
     /*Pop up Modals Variable*/
     public modalRef: BlueModalRef;
-    private notificationsService: NotificationsService;
+    public notificationsService: NotificationsService;
     public modalService: BlueModalService;
     public translateService: TranslateService;
 
@@ -77,38 +79,29 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     @Input() enableActionButton = false;
     isSaveEnabled = true;
     @Input() camsId = 0;
-
     loading$ = new BehaviorSubject<boolean>(false);
 
     unSubscribe$ = new Subject<void>();
 
+    @Input() viewTable: RatingRecommendationTableView;
+
     public isJapaneseDisclosureApplicable: boolean;
     userProfile$: Observable<UserProfile>;
-    readonly isRatingCommitteeWorkflow =
-        (this.featureFlagService.isCommitteeWorkflowEnabled() &&
-            this.ratingRecommendationService.isRatingCommitteeWorkflowEnabled()) ||
-        (this.featureFlagService.isCommitteeWorkflowEnabledFIG() &&
-            this.ratingRecommendationService.isRatingCommitteeWorkflowEnabledFIG()) ||
-        (this.featureFlagService.isCommitteeWorkflowEnabledCFG() &&
-            this.ratingRecommendationService.isRatingCommitteeWorkflowEnabledCFG());
-    isCommitteeWorkflow = false;
 
     ratingRecommendation$ = this.ratingRecommendationService.ratingRecommendationsTableData$.pipe(
         startWith([]),
         shareReplay({ bufferSize: 1, refCount: true })
     );
 
-    ratingRecommendationsTableData$ = this.ratingRecommendationService.ratingRecommendationsTableData$;
+    ratingRecommendationsTableData$ = this.ratingRecommendationService.ratingRecommendationsTableDataWithEmpty$;
 
     continueClicked$ = new ReplaySubject<boolean>(1);
     isFinalized = this.dataService.committeSupportWrapper.isFinalized;
     lastSaveAndDownloadDateExist: boolean;
     currentUrl: string;
     userName: string;
-
-    // get isRasDocumentRequired():boolean{
-    //     return this.dataService?.committeSupportWrapper?.committeeMemoSetup?.rasDocumentReq || false;
-    // }
+    isRatingCommitteeWorkflow = true;
+    private goToWorkListSubscription: Subscription;
 
     constructor(
         public entityService: EntityService,
@@ -139,13 +132,6 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
         this.userProfile$ = this.userProfileService.userProfile$;
 
-        this.router.events.pipe(
-            filter(event => event instanceof NavigationEnd), takeUntil(this.unSubscribe$)).subscribe((event : NavigationEnd)=>{
-            this.currentUrl=event.url
-            console.log("URL updated to : ", this.currentUrl)
-        
-        })
-
         this.dataService
             .getIsSaveClicked()
             .pipe(takeUntil(this.unSubscribe$))
@@ -160,12 +146,16 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                 this.userName = data.username.toLowerCase();
             }
         });
+
+        this.ratingRecommendationsTableData$.pipe(takeUntil(this.unSubscribe$)).subscribe();
     }
 
     ngOnInit(): void {
         this.initFeatureFlagValues();
         this.lastSaveAndDownloadDateExist = !!this.dataService.committeSupportWrapper.lastSaveAndDownloadDate;
-
+        this.isRatingCommitteeWorkflow = this.featureFlagService.isCommitteeWorkflowEnabled(
+            this.dataService.committeSupportWrapper
+        );
         /*SUBSCRIBE TO DOWNLOAD COMPLETE*/
         this.generationService.downloadComplete$
             .pipe(
@@ -186,96 +176,6 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         this.cdrRef.detectChanges();
     }
 
-    // onClickedRasDownload():void{
-    //     if(this.isRasDocumentRequired){
-    //                 this.saveCurrentState()
-    //     this.initiateRasDownload()
-    //     }
-    //     else{
-    //         this.confirmContinueSelection()
-    //     }
-    // }
-
-    private saveCurrentState():void{
-        if(this.dataService?.committeSupportWrapper?.committeeMemoSetup){
-            this.isSaveAction = true
-            this.loading$.next(true)
-
-            if(this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)){
-                this.dataService.initialCommitteeSupport = _.cloneDeep(this.dataService.committeSupportWrapper);
-            }
-            this.updateOrCreateNewCase(true)
-        }
-    }
-    private initiateRasDownload():void{
-        console.log("Ras Download ... ")
-    }
-
-    getButtonText(): string {
-        console.log("getButtonText called, currenturl : ", this.currentUrl)
-        console.log("isRasDocumentRequired : ", this.isRasDocumentRequired)
-        console.log("isRatingRecommendation : ", this.isRatingRecommendation)
-        console.log("isDownloadStage : ", this.isDownloadStage)
-    // Only show RAS DOWNLOAD text when specifically on rating-recommendation page
-    // and RAS document is required and not in download stage
-    const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation')
-    const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties')
-    const isOnComponentSelectionPage = this.currentUrl?.includes('component-selection-setup')
-    console.log("isOnRatingRecommendationPage : ", isOnRatingRecommendationPage)
-    console.log("isOnSetupPage : ", isOnSetupPage)
-    console.log("isOnComponentSelectionPage : ", isOnComponentSelectionPage)
-    if (isOnRatingRecommendationPage && 
-        !isOnSetupPage && this.isRasDocumentRequired && this.isRatingRecommendation && 
-        (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && 
-        !this.isDownloadStage) {
-            console.log("Returning RAS Download")
-        return this.translateService.instant('navigationControl.rasDownloadLabel');
-    }
-    
-    // Show SAVE & CONTINUE when on rating-recommendation page but RAS not required
-    if (this.isRatingRecommendation && !this.isDownloadStage){ 
-        console.log("Returning Save and Continue")
-        console.log("selectedOrgTobeImpacted : ", this.entityService.selectedOrgTobeImpacted?.length)
-        console.log("isEnitySelectionSection  :", this.isEntitySelectionSection)
-        return this.translateService.instant('navigationControl.saveAndContinue');
-    }
-    
-    // Default button text for other pages
-    console.log("Returning default button text")
-    return this.translateService.instant(this.navMetaData?.nextButton?.buttonLabel || 'navigationControl.continueLabel');
-}
-
-    shouldShowRasDownload() : boolean{
-        const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation')
-        const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties')
-
-        return isOnRatingRecommendationPage && 
-        !isOnSetupPage &&
-        this.isRasDocumentRequired && 
-        this.isRatingRecommendation && 
-        (!!this.entityService.selectedOrgTobeImpacted?.length || this.isEntitySelectionSection) && !this.isDownloadStage
-    }
-
-    onClickedRasDownload():void{
-        const isOnRatingRecommendationPage = this.currentUrl?.includes('rating-recommendation')
-        const isOnSetupPage = this.currentUrl?.includes('committee-setup-properties')
-
-        if(isOnRatingRecommendationPage && !isOnSetupPage && this.isRasDocumentRequired){
-            this.saveCurrentState()
-            this.initiateRasDownload()
-        }
-        else{
-            this.confirmContinueSelection()
-        }
-    }
-
-    get isRasDocumentRequired():boolean{
-        const rasRequired = this.dataService?.committeSupportWrapper?.committeeMemoSetup?.rasDocumentReq
-        console.log('Ras Document Required : ')
-        return rasRequired || false
-    }
-
-
     processUpdateCase(caseStatus) {
         return combineLatest([
             this.ratingRecommendationService.selectedRatingViewBy$,
@@ -291,16 +191,24 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     committeeSupportWrapper,
                     ratingRecommendationsTableData
                 ]) => {
-                    if (this.isCommitteeWorkflow && this.isDownloadStage && !this.nextPage) {
+                    if (this.isRatingCommitteeWorkflow && this.isDownloadStage && !this.nextPage) {
                         /**
                          * @description System should not send unselected checkboxes rating classes and corresponding Debts classes to the RC memo and to the vote page
                          */
                         this.dataService.filterEmptyRatingClasses(committeeSupportWrapper);
-                        committeeSupportWrapper = this.removeUnselectedRatingClassesAndDebts(viewBy, selectedRatingRecommendationEntities, committeeSupportWrapper, ratingRecommendationsTableData);
+                        committeeSupportWrapper = this.removeUnselectedRatingClassesAndDebts(
+                            viewBy,
+                            selectedRatingRecommendationEntities,
+                            committeeSupportWrapper,
+                            ratingRecommendationsTableData
+                        );
                     }
+
                     return this.casesService.updateCase(committeeSupportWrapper).pipe(
                         tap(() => {
                             this.dataService.committeSupportWrapper.updateEntities(committeeSupportWrapper.entities);
+                            // Update committeeSupportWrapper instance
+                            this.ratingRecommendationService.loadGetAllEntityRatingRecommendation$.next();
                         })
                     );
                 }
@@ -308,7 +216,17 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         );
     }
 
-    removeUnselectedRatingClassesAndDebts(viewBy: RatingRecommendationTableView, selectedRatingRecommendationEntities: SelectedRatingRecommendationEntities, committeeSupportWrapper: CommitteeSupport, ratingRecommendationsTableData: BlueTableData) {
+    isRasDocumentRequired() {
+        const rasRequired = this.dataService?.committeSupportWrapper?.rasEnabled;
+        return rasRequired && this.currentUrl?.includes('rating-recommendation');
+    }
+
+    removeUnselectedRatingClassesAndDebts(
+        viewBy: RatingRecommendationTableView,
+        selectedRatingRecommendationEntities: SelectedRatingRecommendationEntities,
+        committeeSupportWrapper: CommitteeSupport,
+        ratingRecommendationsTableData: BlueTableData
+    ) {
         if (viewBy === RatingRecommendationTableView.Class && selectedRatingRecommendationEntities.CLASS) {
             committeeSupportWrapper = this.removeUnselectedRatingClasses(
                 committeeSupportWrapper,
@@ -317,8 +235,7 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
             );
         }
 
-        if (viewBy === RatingRecommendationTableView.Debt &&
-            selectedRatingRecommendationEntities.DEBT) {
+        if (viewBy === RatingRecommendationTableView.Debt && selectedRatingRecommendationEntities.DEBT) {
             committeeSupportWrapper = this.removeUnselectedRatingDebts(
                 committeeSupportWrapper,
                 selectedRatingRecommendationEntities
@@ -335,10 +252,6 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
         this.allowResetToHomePageFlag = this.featureFlagService.getTreatmentState(
             SplitTreatments.AFTER_SAVE_AND_DOWNLOAD_DO_NOT_REDIRECT_TO_HOME_SCREEN
         );
-        this.isCommitteeWorkflow =
-            this.featureFlagService.isCommitteeWorkflowEnabled() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledFIG() ||
-            this.featureFlagService.isCommitteeWorkflowEnabledCFG();
     }
 
     /* Manages actions when cases cancellation is clicked */
@@ -368,19 +281,21 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                         if (data?.invitees) {
                             this.isSaveEnabled = this.checkParticipants(data.invitees);
                             if (!this.isSaveEnabled) {
-                                this.dataService.setIsCamsIDInvalid(true);
+                                this.dataService.setIsCamsIDInvalid({
+                                    message: 'committeeSetupProperties.camsIDErrorMessage'
+                                });
+                            } else {
+                                this.controlNavigation(save);
+                                this.dataService.setIsCamsIDInvalid({ message: '' });
                             }
-                        }
-
-                        if (this.isSaveEnabled) {
-                            this.controlNavigation(save);
-                            this.dataService.setIsCamsIDInvalid(false);
                         } else {
-                            this.dataService.setIsCamsIDInvalid(true);
+                            this.dataService.setIsCamsIDInvalid({
+                                message: 'committeeSetupProperties.camsIDErrorMessage'
+                            });
                         }
                     },
                     error: () => {
-                        this.dataService.setIsCamsIDInvalid(true);
+                        this.dataService.setIsCamsIDInvalid({ message: 'committeeSetupProperties.camsIDAPIError' });
                     }
                 });
         }
@@ -454,6 +369,7 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     this.saveAndDownload();
                 } else {
                     this.modalRef = this.modalService.open(RatingRecommendationSaveAndDownloadModalComponent, {
+                        viewTable: this.viewTable,
                         save: (config: RatingRecommendationSaveAndDownloadConfig) => this.saveAndDownload(config)
                     });
                 }
@@ -521,15 +437,6 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
 
     /*Updates current case and navigates to next page  */
     updateCase(caseStatus?: CaseStatus, saveButtonClicked = false): void {
-        caseStatus = this.dataService.committeSupportWrapper.status
-            ? this.dataService.committeSupportWrapper.status
-            : caseStatus;
-        if (
-            this.currentUrl?.includes(AppRoutes.COMMITTEE_SETUP_PROPERTIES) ||
-            this.currentUrl?.includes(AppRoutes.RATING_RECOMMENDATION)
-        ) {
-            caseStatus = CaseStatus.Transitioned;
-        }
         this.processUpdateCase(caseStatus)
             .pipe(
                 tap(() => {
@@ -581,7 +488,14 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                         (config.actionRequestForm && !config.rcmCoverPage && !config.rcmAnalytical) ||
                         this.checkRatingGroupForHomePage()
                     ) {
-                        this.resetToHomePage();
+                       if(this.goToWorkListSubscription){
+                          this.goToWorkListSubscription.unsubscribe();
+                       } 
+                       this.goToWorkListSubscription = this.generationService.downloadComplete$.pipe(
+                            tap(() => {
+                                this.resetToHomePage();
+                            }),
+                            takeUntil(this.unSubscribe$)).subscribe();
                     }
                 }),
                 finalize(() => {
@@ -595,7 +509,6 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     checkRatingGroupForHomePage() {
         const currentRatingGroup = this.dataService.committeSupportWrapper.ratingGroupTemplate;
         const ratingGroup = [
-            RatingGroupType.InfrastructureProjectFinance,
             RatingGroupType.MSPG,
             RatingGroupType.PFG,
             RatingGroupType.SFGCoveredBonds,
@@ -604,6 +517,25 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
             RatingGroupType.SFGSurveillance,
             RatingGroupType.Insurance
         ];
+        if (!this.featureFlagService.isCommitteeWorkflowEnabledSOV()) {
+            ratingGroup.push(RatingGroupType.SovereignBond);
+        }
+        if (!this.featureFlagService.isCommitteeWorkflowEnabledSOVMDB()) {
+            ratingGroup.push(RatingGroupType.SovereignMDB);
+        }
+        if (!this.featureFlagService.isCommitteeWorkflowEnabledSUBSOV()) {
+            ratingGroup.push(RatingGroupType.SubSovereign);
+        }
+        if (!this.featureFlagService.isCommitteeWorkflowEnabledFIG()) {
+            ratingGroup.push(RatingGroupType.BankingFinanceSecurities);
+            ratingGroup.push(RatingGroupType.NonBanking);
+        }
+        if (!this.featureFlagService.isCommitteeWorkflowEnabledCFG()) {
+            ratingGroup.push(RatingGroupType.CFG);
+        }
+        if (!this.featureFlagService.isCommitteeWorkflowEnabledPIF()) {
+            ratingGroup.push(RatingGroupType.InfrastructureProjectFinance);
+        }
 
         return ratingGroup.includes(currentRatingGroup);
     }
@@ -653,6 +585,11 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                     this.generationService.generateRcmDocument(RatingTemplate.Rcm, ratingRecommendationViewType, false)
                 );
             }
+            if (config.ras) {
+                downloadDocs$.push(
+                    this.generationService.generateRasDocument(RatingTemplate.Ras, ratingRecommendationViewType, false)
+                );
+            }
             combineLatest(downloadDocs$)
                 .pipe(first())
                 .subscribe(() => {
@@ -700,9 +637,11 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
     }
 
     private navigateTo(): void {
-        if (this.isCommitteeWorkflow) {
-            this.navigateInviteePage();
-            return;
+        if (this.isRatingCommitteeWorkflow) {
+            if (this.dataService.committeSupportWrapper?.id) {
+                this.navigateInviteePage();
+                return;
+            }
         }
         this.resetToHomePage();
     }
@@ -739,7 +678,9 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
             }
             if (entity?.outlook) {
                 const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
-                    (el) => el?.data?.identifier === entity?.outlook?.identifier && el?.data?.immediateParent?.id === entity?.id
+                    (el) =>
+                        el?.data?.identifier === entity?.outlook?.identifier &&
+                        el?.data?.immediateParent?.id === entity?.id
                 );
                 if (!blueTableData && !!entity?.outlook?.proposedOutlook) {
                     entity.outlook.proposedOutlook = undefined;
@@ -785,8 +726,10 @@ export class BottomNavbarComponent extends ProcessFlowDataManager implements OnI
                 });
             }
             if (entity?.outlook) {
-                const blueTableData = selectedRatingRecommendationEntities.CLASS.blueTableData.find(
-                    (el) => el?.data?.identifier === entity?.outlook?.identifier && el?.data?.immediateParent?.id === entity?.id
+                const blueTableData = selectedRatingRecommendationEntities.DEBT.blueTableData.find(
+                    (el) =>
+                        el?.data?.identifier === entity?.outlook?.identifier &&
+                        el?.data?.immediateParent?.id === entity?.id
                 );
                 if (!blueTableData && !!entity?.outlook?.proposedOutlook) {
                     entity.outlook.proposedOutlook = undefined;
