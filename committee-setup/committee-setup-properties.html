@@ -1,21 +1,34 @@
 <!-- CODE_DEBT: Consider breaking into multiple modules  -->
 
 <div class="main-container">
-    <div *ngIf="!isCamsIDValid" class="text-red-500">
+    <div *ngIf="camsIDInvalidMessage && camsIDInvalidMessage.trim()" class="text-red-500">
         <svg blueIcon="alert-octagon" class="alert-icon"></svg>
-        {{ 'committeeSetupProperties.camsIDErrorMessage' | translate }}
+        {{ camsIDInvalidMessage | translate }}
     </div>
     <div class="rcm-header-inputs">
         <div class = "ras-checkbox">
             <input 
             blueCheckbox type="checkbox" id="ex-basic" value="1" 
+            [(ngModel)] = "dataService.committeSupportWrapper.rasEnabled"
             (ngModelChange)="updateModel()"
             
             />
+            
             <label blueFieldLabel for="ex-basic">
                 {{ 'committeeSetupProperties.rcmQuestions.ratingAssessmentService' | translate }}
             </label>
+            <svg
+            blueIcon="info"
+            bluePopoverAnchor
+            [popover]="message"
+            popoverEvent="mouseenter"
+            class="button-link info-tooltip-icon"
+        ></svg>
+        <blue-popover #message class="blue-popover">
+            <div class="blue-popover-label">{{ 'features.keyFactual.rasDownloadTooltipText' | translate }}</div>
+        </blue-popover>
         </div>
+        
         <app-shared-date-picker
             [label]="'actionSetupProperties.initialQuestions.expectedRatingCommitteeTitle' | translate"
             [minDate]="minDate"
@@ -28,7 +41,7 @@
                 <span
                     class="cams-label leading-10 field-label"
                     [ngClass]="{
-                        'text-red-500': !isCamsIDValid
+                        'text-red-500': camsIDInvalidMessage
                     }"
                 >
                     {{ 'committeeSetupProperties.rcmQuestions.conflictAndAttestationMgmnt' | translate }}&nbsp; &nbsp;{{
@@ -83,13 +96,7 @@
             >
                 <ng-container
                     *ngIf="
-                        selectedRatingGroup === selectedRatingGroupsEnum.SovereignBond ||
-                            selectedRatingGroup === selectedRatingGroupsEnum.SubSovereign ||
-                            selectedRatingGroup === selectedRatingGroupsEnum.SovereignMDB ||
-                            selectedRatingGroup === selectedRatingGroupsEnum.BankingFinanceSecurities ||
-                            selectedRatingGroup === selectedRatingGroupsEnum.NonBanking ||
-                            selectedRatingGroup === selectedRatingGroupsEnum.Insurance ||
-                            selectedRatingGroup === selectedRatingGroupsEnum.CFG
+                        isRatingCommitteeWorkflow
                         else otherGrp
                     "
                 >
