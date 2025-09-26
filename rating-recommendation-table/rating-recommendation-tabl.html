@@ -1,857 +1,112 @@
-<section class="table-container">
-    <blue-table
-        [data]="ratingRecommendation"
-        [includeIndeterminateInSelect]="false"
-        class="main-table"
-        (select)="onEntityTableSelect($event)"
-    >
-        <ng-template blueTemplate="header">
-            <tr blueTableRow>
-                <th blueTableHeaderCell class="header-checkbox" colspan="1" scope="col">
-                    <input
-                        [attr.data-testid]="'selectAllRatingRecommendation_' + selectedTableView"
-                        blueTableCheckbox
-                        (check)="onEntityTableCheckBoxSelected($event)"
-                        selectionScope="all"
-                    />
-                </th>
-                <th
-                    scope="col"
-                    id="rating-action"
-                    blueTableHeaderCell
-                    [attr.colspan]="
-                        selectedTableView === tableViewType.Class
-                            ? isFigBanking
-                                ? defaultColSpanViewFig
-                                : defaultColSpanEntityNameOrIDClassView
-                            : defaultColSpanEntityNameOrIDDebtView
-                    "
-                >
-                    {{ 'ratingRecommendation.tableHeaders.entityNameOrID' | translate }}
-                </th>
-                <th
-                    scope="col"
-                    blueTableHeaderCell
-                    [attr.colspan]="
-                        selectedTableView === tableViewType.Class
-                            ? isFigBanking
-                                ? defaultColSpanViewFig
-                                : defaultColSpanCurrentClassView
-                            : defaultColSpanCurrentDebtView
-                    "
-                >
-                    {{ 'ratingRecommendation.tableHeaders.current' | translate }}
-                </th>
-                <th
-                    blueTableHeaderCell
-                    [attr.colspan]="isFigBanking ? 3 : 2"
-                    class="recommendations-review"
-                    scope="col"
-                >
-                    {{ 'ratingRecommendation.tableHeaders.recommendation' | translate }}
-                </th>
-            </tr>
-        </ng-template>
-
-        <ng-template blueTemplate="body" let-row="row" let-level="level" let-index="index">
-            <!--Debt View Template -->
-            <ng-container *ngIf="selectedTableView === tableViewType.Debt; else classViewRating">
-                <tr
-                    [blueTableRow]="row"
-                    *ngIf="!row.data?.isSubTableHeader"
-                    [attr.data-testid]="
-                        'ratingEntity_' +
-                        selectedTableView +
-                        '_' +
-                        (row.data.id ? row.data?.id : row.data?.immediateParent?.id)
-                    "
-                >
-                    <td blueTableCell [expanderRow]="row" [expanderLevel]="level">
-                        <input blueTableCheckbox 
-                        (check)="onEntityTableCheckBoxSelected($event, row.data)" />
-                    </td>
-                    <td blueTableCell [class.col-entity-is-figbanking]="isFigBanking">
-                        <div *ngIf="level === 0" class="col-entity">
-                            <span class="col-entity-name">
-                                {{ row.data.name }}
-                            </span>
-                            <span class="col-entity-id">
-                                {{ row.data.id }}
-                            </span>
-                        </div>
-
-                        <span *ngIf="level !== 0">
-                            <ng-container *ngIf="!row.data.added; else customDebt">
-                                {{ row.data.name }}
-                                {{ row.data?.currency ? '(' + (row.data.currency | titlecase) + ')' : '' }}
-                            </ng-container>
-                            <ng-template #customDebt>
-                                <div [formGroup]="debtForm" class="custom-debt">
-                                    <ng-container *ngIf="debtForm.value[row.data.identifier]">
-                                        <div
-                                            class="custom-debt-form-group"
-                                            [formGroupName]="row.data.identifier"
-                                            *ngIf="debtForm.value[row.data.identifier]?.ratingClass !== undefined"
-                                        >
-                                            <ng-container
-                                                *ngIf="
-                                                    !debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName;
-                                                    else typeaheadReadOnly
-                                                "
-                                            >
-                                                <blue-typeahead
-                                                    [placeholder]="'ratingRecommendation.search' | translate"
-                                                    [searchFn]="searchFn"
-                                                    [displayFn]="displayFn"
-                                                    [inputMinLength]="1"
-                                                    [resultTemplate]="resultTemplate"
-                                                    formControlName="ratingClass"
-                                                    [ngClass]="{
-                                                        'override-required-bg':
-                                                            row.isSelected &&
-                                                            continueClicked &&
-                                                            !debtForm.value[row.data.identifier].ratingClass
-                                                                ?.ratingClassName
-                                                    }"
-                                                >
-                                                    <ng-template #resultTemplate let-result="result">
-                                                        {{ result.ratingClassName }}
-                                                    </ng-template>
-                                                </blue-typeahead>
-
-                                                <div
-                                                    class="required-error"
-                                                    *ngIf="
-                                                        row.isSelected &&
-                                                        continueClicked &&
-                                                        !debtForm.value[row.data.identifier].ratingClassName
-                                                    "
-                                                >
-                                                    <div class="required-error-icon">
-                                                        <svg blueIcon="alert-octagon"></svg>
-                                                    </div>
-                                                    {{ 'ratingRecommendation.pleaseSelect' | translate }}
-                                                </div>
-                                            </ng-container>
-                                            <ng-template #typeaheadReadOnly>
-                                                {{ debtForm.value[row.data.identifier].ratingClass.ratingClassName }}
-                                            </ng-template>
-                                        </div>
-                                    </ng-container>
-                                    <blue-spinner
-                                        *ngIf="customDebtsState[row.data.identifier]?.loading"
-                                        class="loading"
-                                        label="{{ 'ratingRecommendation.loading' | translate }}"
-                                    ></blue-spinner>
-                                </div>
-                            </ng-template>
-                        </span>
-                        <p *ngIf="level !== 0 && row.data?.issuer">
-                            <span>{{ 'ratingRecommendation.issuedBy' | translate }} {{ row.data.issuer }}</span>
-                        </p>
-                    </td>
-
-                    <ng-container *ngIf="!row.data.added; else customDebt">
-                        <td
-                            blueTableCell
-                            [ngClass]="{
-                                'col-entity-desc': row.data.ratingDescription?.name,
-                                'col-entity-is-figbanking-desc': isFigBanking
-                            }"
-                        >
-                            <span
-                                bluePopoverAnchor
-                                [popover]="descriptionPopOver"
-                                [popoverEvent]="popoverEvent.MouseEnter"
-                                popoverPlacement="top"
-                                *ngIf="level !== 0"
-                            >
-                                {{ row.data.ratingDescription?.name || ' - ' }}
-                            </span>
-                            <!-- Pop Over Template -->
-                            <blue-popover #descriptionPopOver [hideArrow]="false">
-                                {{
-                                    row.data.ratingDescription?.cusip ||
-                                        row.data.ratingDescription?.isin ||
-                                        row.data.ratingDescription?.legacyId
-                                }}
-                            </blue-popover>
-                        </td>
-                    </ng-container>
-                    <ng-template #customDebt>
-                        <td blueTableCell>
-                            <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
-                                <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                    <span [formGroupName]="row.data.identifier">
-                                        <input
-                                            blueInput
-                                            type="text"
-                                            formControlName="name"
-                                            [ngClass]="{
-                                                'override-required-bg':
-                                                    row.isSelected &&
-                                                    continueClicked &&
-                                                    !debtForm.value[row.data.identifier].name
-                                            }"
-                                        />
-                                    </span>
-
-                                    <div
-                                        class="required-error"
-                                        *ngIf="
-                                            row.isSelected &&
-                                            continueClicked &&
-                                            !debtForm.value[row.data.identifier].name
-                                        "
-                                    >
-                                        <div class="required-error-icon">
-                                            <svg blueIcon="alert-octagon"></svg>
-                                        </div>
-                                        {{ 'ratingRecommendation.required' | translate }}
-                                    </div>
-                                </span>
-                            </ng-container>
-                        </td>
-                    </ng-template>
-
-                    <td blueTableCell>
-                        <div *ngIf="level !== 0">{{ row.data?.ratingClassBadges ?? '-' }}</div>
-                    </td>
-                    <td blueTableCell>
-                        <span *ngIf="level !== 0 && !row?.children?.length">
-                            {{ row.data.value || ' - ' }}
-                            {{
-                                recommendationsDropdownOptionMapping
-                                    | displayValueFromList
-                                        : { stringToDisplay: row.data?.watchStatus, inputType: reviewStatus }
-                            }}
-                            {{ row.data?.hybrid ? '(hyb)' : null }}
-                            {{ row.data?.xgRating ? '(XG)' : null }}
-                        </span>
-                    </td>
-
-                    <!--Fig Banking Outlook Details -->
-                    <td blueTableCell *ngIf="isFigBanking">
-                        <span *ngIf="level !== 0 && !row?.children?.length">
-                            {{ row.data?.outlook || ' - ' }}
-                        </span>
-                    </td>
-                    <!--Fig Banking Outlook Details -->
-
-                    <ng-container *ngIf="!isFigBanking">
-                        <ng-container *ngIf="!row.data.added; else customDebt">
-                            <td
-                                blueTableCell
-                                *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                                [attr.rowspan]="row.data.ratingCount"
-                            >
-                                <span *ngIf="level !== 0">
-                                    {{
-                                        row.data.ratingDescription.outstandingAmount
-                                            ? (row.data.ratingDescription.outstandingAmount | number) +
-                                              '  ' +
-                                              ('ratingRecommendation.mil' | translate)
-                                            : ' - '
-                                    }}
-                                </span>
-                            </td>
-
-                            <td
-                                blueTableCell
-                                *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                                [attr.rowspan]="row.data.ratingCount"
-                            >
-                                <span *ngIf="level !== 0">
-                                    {{
-                                        row.data.ratingDescription?.maturityDate
-                                            ? (row.data.ratingDescription?.maturityDate | date : 'd MMM y')
-                                            : ' - '
-                                    }}
-                                </span>
-                            </td>
-
-                            <td
-                                blueTableCell
-                                *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                                [attr.rowspan]="row.data.ratingCount"
-                            >
-                                <span *ngIf="level !== 0">
-                                    {{ row.data.ratingDescription?.currencyCode || ' - ' }}
-                                </span>
-                            </td>
-                        </ng-container>
-
-                        <ng-template #customDebt>
-                            <td
-                                blueTableCell
-                                *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                                [attr.rowspan]="row.data.ratingCount"
-                            >
-                                <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
-                                    <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                        <span [formGroupName]="row.data.identifier" class="custom-debt-face-value">
-                                            <input blueInput type="number" formControlName="originalFaceAmount" />
-
-                                            <span class="text">{{ 'ratingRecommendation.mil' | translate }}</span>
-                                        </span>
-                                    </span>
-                                </ng-container>
-                            </td>
-                            <td
-                                blueTableCell
-                                *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                                [attr.rowspan]="row.data.ratingCount"
-                                style="min-width: 140px"
-                            >
-                                <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
-                                    <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                        <span [formGroupName]="row.data.identifier">
-                                            <blue-datepicker
-                                                formControlName="maturityDate"
-                                                autocomplete="off"
-                                                [pickOnly]="true"
-                                                [min]="minMaturityDate"
-                                            ></blue-datepicker>
-                                        </span>
-                                    </span>
-                                </ng-container>
-                            </td>
-                            <td
-                                blueTableCell
-                                *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                                [attr.rowspan]="row.data.ratingCount"
-                            >
-                                <ng-container *ngIf="debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName">
-                                    <span *ngIf="level !== 0" [formGroup]="debtForm">
-                                        <span [formGroupName]="row.data.identifier">
-                                            <input blueInput type="text" formControlName="currencyCode" />
-                                        </span>
-                                    </span>
-                                </ng-container>
-                            </td>
-                        </ng-template>
-                    </ng-container>
-
-                    <ng-container *ngIf="isFigBanking">
-                        <td
-                            blueTableCell
-                            *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                            [attr.rowspan]="row.data.ratingCount"
-                        >
-                            <span *ngIf="level !== 0">
-                                {{
-                                    row.data.ratingDescription.originalFaceAmount
-                                        ? (row.data.ratingDescription.originalFaceAmount | number) +
-                                          '  ' +
-                                          ('ratingRecommendation.mil' | translate)
-                                        : ' - '
-                                }}
-                            </span>
-                        </td>
-
-                        <td
-                            blueTableCell
-                            *ngIf="!(row.data.ratingCount > 1) || row.data.ratingIndex === 0"
-                            [attr.rowspan]="row.data.ratingCount"
-                        >
-                            <span *ngIf="level !== 0">
-                                {{
-                                    row.data.ratingDescription?.maturityDate
-                                        ? (row.data.ratingDescription?.maturityDate | date : 'd MMM y')
-                                        : ' - '
-                                }}
-                                /
-                                {{ row.data.ratingDescription?.currencyCode || ' - ' }}
-                            </span>
-                        </td>
-                    </ng-container>
-
-                    <td blueTableCell>
-                        <div class="debt-class-delete" *ngIf="row.data.added">
-                            <button blueButton theme="secondary" (click)="onDebtRemoved(row.data?.identifier)">
-                                <svg [blueIcon]="removeIcon" class="icon-sm"></svg>
-                            </button>
-                        </div>
-                    </td>
-
-                    <!--Table Input content-->
-
-                    <td
-                        *ngIf="row.data?.recommendationInputType === inputTypes.OUTLOOK"
-                        blueTableCell
-                        [colSpan]="
-                            row.data?.recommendationInputType === inputTypes.OUTLOOK ? (isFigBanking ? 3 : 2) : 1
-                        "
-                        class="recommendations recommendations-review col-recommendation--rating"
-                    >
-                        <app-recommendation
-                            *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
-                            [isSelected]="row.isSelected"
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? row.data?.recommendationInputType === inputTypes.OUTLOOK
-                                        ? recommendationsDropdownOptionMapping[row.data?.recommendationInputType]
-                                        : row.data.refRatings
-                                    : []
-                            "
-                            [recommendationInputType]="row.data?.recommendationInputType"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                            [continueClicked]="continueClicked"
-                        ></app-recommendation>
-                    </td>
-
-                    <td
-                        *ngIf="row.data?.recommendationInputType !== inputTypes.OUTLOOK"
-                        blueTableCell
-                        class="recommendations recommendations-review col-recommendation--rating"
-                    >
-                        <app-recommendation
-                            *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
-                            [isSelected]="
-                                !row.data.added ||
-                                (debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName &&
-                                    customDebtsState[row.data.identifier]?.loading === false)
-                                    ? row.isSelected
-                                    : false
-                            "
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? row.data?.recommendationInputType === inputTypes.LDG
-                                        ? recommendationsDropdownOptionMapping[row.data?.recommendationInputType]
-                                        : row.data.refRatings
-                                    : []
-                            "
-                            [recommendationInputType]="row.data?.recommendationInputType"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                            [continueClicked]="continueClicked"
-                        ></app-recommendation>
-                    </td>
-
-                    <!--Its Fig Banking Outlook Drop Down -->
-                    <td
-                        blueTableCell
-                        class="data-cell-center recommendations col-recommendation--review-status"
-                        *ngIf="isFigBanking && row.data?.recommendationInputType !== inputTypes.OUTLOOK"
-                    >
-                        <app-recommendation
-                            *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
-                            [isSelected]="
-                                !row.data.added ||
-                                (debtForm.value[row.data.identifier]?.ratingClass?.ratingClassName &&
-                                    customDebtsState[row.data.identifier]?.loading === false)
-                                    ? row.isSelected
-                                    : false
-                            "
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? recommendationsDropdownOptionMapping[inputTypes.OUTLOOK]
-                                    : []
-                            "
-                            [recommendationInputType]="inputTypes.OUTLOOK"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                            [continueClicked]="continueClicked"
-                        ></app-recommendation>
-                    </td>
-                    <!--Its Fig Banking Outlook Drop Down -->
-
-                    <td
-                        blueTableCell
-                        class="data-cell-center recommendations col-recommendation--review-status"
-                        *ngIf="row.data?.recommendationInputType !== inputTypes.OUTLOOK"
-                    >
-                        <app-recommendation
-                            *ngIf="
-                                !row?.children?.length &&
-                                row.data?.recommendationInputType !== inputTypes.LDG &&
-                                recommendationsDropdownOptionMapping
-                            "
-                            [isReviewStatus]="true"
-                            [isSelected]="row.isSelected"
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? recommendationsDropdownOptionMapping[reviewStatus]
-                                    : []
-                            "
-                            [recommendationInputType]="row.data?.recommendationInputType"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                            [continueClicked]="continueClicked"
-                        ></app-recommendation>
-                    </td>
-                </tr>
-                <tr [blueTableRow]="row" *ngIf="row.data?.isSubTableHeader">
-                    <td blueTableHeaderCell></td>
-                    <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.ratingClass' | translate }}</td>
-                    <td blueTableHeaderCell>
-                        {{ 'ratingRecommendation.tableHeaders.description' | translate }}
-                    </td>
-                    <td blueTableHeaderCell>
-                        {{ 'ratingRecommendation.tableHeaders.details' | translate }}
-                    </td>
-                    <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.rating' | translate }}</td>
-
-                    <td blueTableHeaderCell *ngIf="isFigBanking">
-                        {{ 'ratingRecommendation.tableHeaders.outlook' | translate }}
-                    </td>
-
-                    <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.faceValue' | translate }}</td>
-
-                    <ng-container *ngIf="!isFigBanking">
-                        <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.maturity' | translate }}</td>
-                        <td blueTableHeaderCell colspan="2">
-                            {{ 'ratingRecommendation.tableHeaders.currency' | translate }}
-                        </td>
-                    </ng-container>
-                    <ng-container *ngIf="isFigBanking">
-                        <td blueTableHeaderCell colspan="2">
-                            {{ 'ratingRecommendation.tableHeaders.maturityCurrency' | translate }}
-                        </td>
-                    </ng-container>
-
-                    <td blueTableHeaderCell class="recommendations-review">
-                        {{ 'ratingRecommendation.tableHeaders.rating' | translate }}
-                    </td>
-                    <td blueTableHeaderCell *ngIf="isFigBanking">
-                        {{ 'ratingRecommendation.tableHeaders.outlook' | translate }}
-                    </td>
-                    <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.reviewStatus' | translate }}</td>
-                </tr>
-                <tr [blueTableRow]="row" *ngIf="row.data?.isSubTableHeader && !row.data?.immediateParent?.rated">
-                    <td
-                        blueTableCell
-                        [expanderRow]="row"
-                        [expanderLevel]="level"
-                        class="col-rating-class-checkbox"
-                    ></td>
-                    <td blueTableCell [attr.colspan]="8" class="data-cell-center col-no-rating-message">
-                        <span>{{ 'ratingRecommendation.noActiveRatings' | translate }}</span>
-                    </td>
-                    <td
-                        blueTableCell
-                        class="recommendations recommendations-review col-recommendation--rating"
-                        [attr.colspan]="isFigBanking ? 3 : 2"
-                    ></td>
-                </tr>
+<ng-container *ngIf="viewTableBy$ | async as tableView">
+    <ng-container *ngIf="ratingRecommendation$ | async as ratingRecommendation">
+        <app-rating-recommendation-header
+            [ratingViewType]="committeeSupportWrapper.ratingViewType"
+            [viewTableBy]="tableView"
+            [isTableViewDisabled]="isTableViewDisabled"
+            [selectedEntityDetails]="headerDetail$ | async"
+            [enableActionButton]="enableActionButton$ | async"
+            (changeViewTableBy)="updateViewTableBy($event)"
+            (dispatchBulkAction)="onBulkActionDispatched($event, ratingRecommendation, tableView)"
+            [ratingClassHidden]="hideCustomRatingClassButton$ | async"
+            [enableRatingClassButton]="enableCustomRatingClassButton$ | async"
+            [enableAddDebtButton]="enableAddDebtButton$ | async"
+            (addRatingClass)="addRatingClass()"
+            (addDebt)="addDebt()"
+        ></app-rating-recommendation-header>
+        <div class="mt-3 rating-table-container" id="table-content">
+            <ng-container *ngIf="ratingsMetadataLookup$ | async as ratingsMetadataLookup">
+                <app-recommendation-table
+                    [ratingsMetadataLookup]="ratingsMetadataLookup"
+                    (selectedEntityChanged)="onSelectedRatingEntity($event)"
+                    (recommendationChange)="onRecommendationChange($event)"
+                    (updatedRatingRecommendation)="onUpdatedRatingRecommendation($event)"
+                    [isFigBanking]="isFigBanking$ | async"
+                    [selectedTableView]="tableView"
+                    [ratingRecommendation]="ratingRecommendation"
+                    [recommendationsDropdownOptionMapping]="recommendationsDropdownOptionMapping$ | async"
+                    [continueClicked]="continueClicked$ | async"
+                    (ratingClassRemoved)="onRatingClassRemoved($event)"
+                    (ratingClassChanged)="onRatingClassChanged($event)"
+                    [customRatingClasses]="customRatingClasses$ | async"
+                    [customRatingClassesState]="customRatingClassesState$ | async"
+                    (debtRemoved)="onDebtRemoved($event)"
+                    (debtChanged)="onDebtChanged($event)"
+                    [customDebts]="customDebts$ | async"
+                    [customDebtsState]="customDebtsState$ | async"
+                    [isCommitteeWorkflow]="isCommitteeWorkflow"
+                ></app-recommendation-table>
             </ng-container>
-
-            <!--Class View Template -->
-            <ng-template #classViewRating>
-                <tr
-                    [blueTableRow]="row"
-                    *ngIf="!row.data?.isSubTableHeader"
-                    [attr.data-testid]="
-                        'ratingEntity_' +
-                        selectedTableView +
-                        '_' +
-                        (row.data.id ? row.data?.id : row.data?.immediateParent?.id)
-                    "
-                    [ngClass]="{ 'merged-appearance': checkNextForSplitRating(index, row) }"
-                >
-                    <td blueTableCell [expanderRow]="row" [expanderLevel]="level" class="col-rating-class-checkbox">
-                        <input blueTableCheckbox 
-
-                        (check)="onEntityTableCheckBoxSelected($event, row.data)" />
-                    </td>
-                    <td blueTableCell [attr.colspan]="selectedTableView === tableViewType.Class ? 4 : 1">
-                        <div *ngIf="level === 0" class="col-entity">
-                            <span class="col-entity-name">
-                                {{ row.data.name }}
-                            </span>
-                            <span class="col-entity-id">
-                                {{ row.data.id }}
-                            </span>
-                        </div>
-
-                        <span *ngIf="level !== 0">
-                            <ng-container
-                                *ngIf="
-                                    !row.data.added || selectedTableView === tableViewType.Debt;
-                                    else customRatingClass
-                                "
-                            >
-                                {{ row.data.name }}
-                                {{ row.data?.currency ? '(' + (row.data.currency | titlecase) + ')' : '' }}
-                            </ng-container>
-                            <ng-template #customRatingClass>
-                                <div [formGroup]="ratingClassForm" class="custom-rating-class">
-                                    <div
-                                        class="custom-rating-class-form-control"
-                                        *ngIf="ratingClassForm.value[row.data.identifier] !== undefined"
-                                    >
-                                        <ng-container
-                                            *ngIf="
-                                                !ratingClassForm.value[row.data.identifier].ratingClassName;
-                                                else typeaheadReadOnly
-                                            "
-                                        >
-                                            <blue-typeahead
-                                                [placeholder]="'ratingRecommendation.search' | translate"
-                                                [searchFn]="searchFn"
-                                                [displayFn]="displayFn"
-                                                [inputMinLength]="1"
-                                                [resultTemplate]="resultTemplate"
-                                                [formControlName]="row.data.identifier"
-                                                [ngClass]="{
-                                                    'override-required-bg':
-                                                        row.isSelected &&
-                                                        continueClicked &&
-                                                        !ratingClassForm.value[row.data.identifier].ratingClassName
-                                                }"
-                                            >
-                                                <ng-template #resultTemplate let-result="result">
-                                                    {{ result.ratingClassName }}
-                                                </ng-template>
-                                            </blue-typeahead>
-
-                                            <div
-                                                class="required-error"
-                                                *ngIf="
-                                                    row.isSelected &&
-                                                    continueClicked &&
-                                                    !ratingClassForm.value[row.data.identifier].ratingClassName
-                                                "
-                                            >
-                                                <div class="required-error-icon">
-                                                    <svg blueIcon="alert-octagon"></svg>
-                                                </div>
-                                                {{ 'features.entityFilters.pleaseSelect' | translate }}
-                                            </div>
-                                        </ng-container>
-                                        <ng-template #typeaheadReadOnly>
-                                            {{ ratingClassForm.value[row.data.identifier].ratingClassName }}
-                                        </ng-template>
-                                    </div>
-
-                                    <blue-spinner
-                                        *ngIf="customRatingClassesState[row.data.identifier]?.loading"
-                                        class="loading"
-                                        label="{{ 'ratingRecommendation.loading' | translate }}"
-                                    ></blue-spinner>
-                                </div>
+            <div class="country-ceiling">
+                <div class="country-ceiling-title">
+                    {{ 'ratingRecommendation.countryCeilings.title' | translate }}
+                </div>
+                <div class="country-ceiling-item">
+                    <div class="country-ceiling-item-country">{{ countryCode | translate }}</div>
+                    <div class="country-ceiling-item-table">
+                        <blue-table [data]="countryCeilings$ | async">
+                            <ng-template blueTemplate="header">
+                                <tr blueTableHeaderRow sticky>
+                                    <td blueTableHeaderCell>
+                                        {{
+                                            'ratingRecommendation.countryCeilings.localCurrencySovereignRating'
+                                                | translate
+                                        }}
+                                    </td>
+                                    <td blueTableHeaderCell>
+                                        {{
+                                            'ratingRecommendation.countryCeilings.foreignCurrencySovereignRating'
+                                                | translate
+                                        }}
+                                    </td>
+                                    <td blueTableHeaderCell>
+                                        {{
+                                            'ratingRecommendation.countryCeilings.localCurrencyCountryCeiling'
+                                                | translate
+                                        }}
+                                    </td>
+                                    <td blueTableHeaderCell>
+                                        {{
+                                            'ratingRecommendation.countryCeilings.foreignCurrencyCountryCeiling'
+                                                | translate
+                                        }}
+                                    </td>
+                                </tr>
                             </ng-template>
-                        </span>
-                    </td>
-                    <td blueTableCell>
-                        <div *ngIf="level !== 0">
-                            {{ row.data.ratingClassBadges }}
-                        </div>
-                    </td>
-                    <td *ngIf="!row.data.added || selectedTableView === tableViewType.Debt" blueTableCell>
-                        <span *ngIf="level !== 0 && !row?.children?.length">
-                            {{ row.data.value || ' - ' }}
-                            {{
-                                recommendationsDropdownOptionMapping
-                                    | displayValueFromList
-                                        : { stringToDisplay: row.data?.watchStatus, inputType: reviewStatus }
-                            }}
-                            {{ row.data?.hybrid ? '(hyb)' : null }}
-                            {{ row.data?.xgRating ? '(XG)' : null }}
-                        </span>
-                    </td>
+                            <ng-template blueTemplate="body" let-row="row">
+                                <tr blueTableRow [blueTableRow]="row">
+                                    <td blueTableCell>{{ row.data.localSovereignRating }}</td>
+                                    <td blueTableCell>{{ row.data.foreignSovereignRating }}</td>
+                                    <td blueTableCell>{{ row.data.localCountryCeiling }}</td>
+                                    <td blueTableCell>{{ row.data.foreignCountryCeiling }}</td>
+                                </tr>
+                            </ng-template>
+                        </blue-table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </ng-container>
+</ng-container>
+<app-bottom-navbar
+    [viewTable]="viewTableBy$ | async"
+    (continueClickedEventEmitter)="onContinueClicked()"
+    [navMetaData]="buttonMetadata"
+    [prevPage]="
+        selectedTemplate === ratingTemplate.ArfRcm
+            ? appRoutes.COMMITTEE_SETUP_PROPERTIES
+            : selectedTemplate === ratingTemplate.Arf
+            ? appRoutes.ACTION_SETUP_PROPERTIES
+            : appRoutes.COMMITTEE_SETUP_PROPERTIES
+    "
+    [sectionIsValid]="true"
+    [isDownloadStage]="true"
+    [isRatingsTableValid]="isRatingsTableValid$ | async"
+    [enableActionButton]="enableActionButton$ | async"
+    (backClickedEventEmitter)="navBackToActionSetupProperties()"
+    #bottomNavBar
+></app-bottom-navbar>
 
-                    <td blueTableCell *ngIf="isFigBanking">
-                        <span *ngIf="level !== 0 && !row?.children?.length">
-                            {{ row.data?.outlook || ' - ' }}
-                        </span>
-                    </td>
-
-                    <!--Fill Up Remaining Screen Col-->
-                    <td blueTableCell colspan="3"></td>
-
-                    <td *ngIf="row.data.added" blueTableCell>
-                        <div class="recommendation-class-delete">
-                            <button blueButton theme="secondary" (click)="onRatingClassRemoved(row.data?.identifier)">
-                                <svg [blueIcon]="removeIcon" class="icon-sm"></svg>
-                            </button>
-                        </div>
-                    </td>
-
-                    <!--Table Input Content-->
-                    <td
-                        *ngIf="row.data?.recommendationInputType === inputTypes.OUTLOOK"
-                        blueTableCell
-                        [colSpan]="
-                            row.data?.recommendationInputType === inputTypes.OUTLOOK ? (isFigBanking ? 3 : 2) : 1
-                        "
-                        class="recommendations recommendations-review col-recommendation--rating"
-                    >
-                        <app-recommendation
-                            *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
-                            [isSelected]="row.isSelected"
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? row.data?.recommendationInputType === inputTypes.OUTLOOK
-                                        ? recommendationsDropdownOptionMapping[row.data?.recommendationInputType]
-                                        : row.data.refRatings
-                                    : []
-                            "
-                            [recommendationInputType]="row.data?.recommendationInputType"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [continueClicked]="continueClicked"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                        ></app-recommendation>
-                    </td>
-
-                    <td
-                        *ngIf="row.data?.recommendationInputType !== inputTypes.OUTLOOK"
-                        blueTableCell
-                        class="recommendations recommendations-review col-recommendation--rating"
-                    >
-                        <app-recommendation
-                            *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
-                            [isSelected]="
-                                !row.data.added ||
-                                (ratingClassForm.value[row.data.identifier]?.ratingClassName &&
-                                    customRatingClassesState[row.data.identifier]?.loading === false)
-                                    ? row.isSelected
-                                    : false
-                            "
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? row.data?.recommendationInputType === inputTypes.LDG
-                                        ? recommendationsDropdownOptionMapping[row.data?.recommendationInputType]
-                                        : row.data.refRatings
-                                    : []
-                            "
-                            [recommendationInputType]="row.data?.recommendationInputType"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [continueClicked]="continueClicked"
-                            [customRatingClass]="ratingClassForm.value[row.data.identifier]"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                        ></app-recommendation>
-                    </td>
-                    <td
-                        blueTableCell
-                        class="data-cell-center recommendations col-recommendation--rating"
-                        *ngIf="
-                            isFigBanking && row.data?.recommendationInputType !== inputTypes.OUTLOOK
-                        "
-                    >
-                        <app-recommendation
-                            *ngIf="!row?.children?.length && recommendationsDropdownOptionMapping"
-                            [isSelected]="
-                                !row.data.added ||
-                                (ratingClassForm.value[row.data.identifier]?.ratingClassName &&
-                                    customRatingClassesState[row.data.identifier]?.loading === false)
-                                    ? row.isSelected
-                                    : false
-                            "
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? recommendationsDropdownOptionMapping[inputTypes.OUTLOOK]
-                                    : []
-                            "
-                            [recommendationInputType]="inputTypes.OUTLOOK"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [continueClicked]="continueClicked"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                        ></app-recommendation>
-                    </td>
-                    <td
-                        blueTableCell
-                        class="data-cell-center recommendations col-recommendation--review-status"
-                        *ngIf="row.data?.recommendationInputType !== inputTypes.OUTLOOK"
-                    >
-                        <app-recommendation
-                            *ngIf="
-                                !row?.children?.length &&
-                                row.data?.recommendationInputType !== inputTypes.LDG &&
-                                recommendationsDropdownOptionMapping
-                            "
-                            [isReviewStatus]="true"
-                            [isSelected]="
-                                !row.data.added ||
-                                (ratingClassForm.value[row.data.identifier]?.ratingClassName &&
-                                    customRatingClassesState[row.data.identifier]?.loading === false)
-                                    ? row.isSelected
-                                    : false
-                            "
-                            [ratings]="row.data"
-                            (updateRecommendationEventEmitter)="updateRecommendationEventEmitter($event, row)"
-                            [recommendationOption]="
-                                recommendationsDropdownOptionMapping
-                                    ? recommendationsDropdownOptionMapping[reviewStatus]
-                                    : []
-                            "
-                            [recommendationInputType]="row.data?.recommendationInputType"
-                            [defaultRecommendationOptions]="recommendationsDropdownOptionMapping"
-                            [isFigBanking]="isFigBanking"
-                            [continueClicked]="continueClicked"
-                            [isCommitteeWorkflow]="isCommitteeWorkflow"
-                        ></app-recommendation>
-                    </td>
-                </tr>
-
-                <tr [blueTableRow]="row" *ngIf="row.data?.isSubTableHeader">
-                    <td blueTableHeaderCell></td>
-                    <td blueTableHeaderCell [attr.colspan]="4">
-                        {{ 'ratingRecommendation.tableHeaders.classOrDebt' | translate }}
-                    </td>
-                    <td blueTableHeaderCell>
-                        {{ 'ratingRecommendation.tableHeaders.details' | translate }}
-                    </td>
-                    <td blueTableHeaderCell [attr.colspan]="isFigBanking ? 1 : 4">
-                        {{ 'ratingRecommendation.tableHeaders.rating' | translate }}
-                    </td>
-                    <td blueTableHeaderCell *ngIf="isFigBanking" [attr.colspan]="4">
-                        {{ 'ratingRecommendation.tableHeaders.outlook' | translate }}
-                    </td>
-
-                    <!--Recommendation Section -->
-                    <td blueTableHeaderCell class="recommendations-review">
-                        {{ 'ratingRecommendation.tableHeaders.rating' | translate }}
-                    </td>
-                    <td blueTableHeaderCell *ngIf="isFigBanking">
-                        {{ 'ratingRecommendation.tableHeaders.outlook' | translate }}
-                    </td>
-                    <td blueTableHeaderCell>{{ 'ratingRecommendation.tableHeaders.reviewStatus' | translate }}</td>
-                    <!--Recommendation Section -->
-                </tr>
-                <tr [blueTableRow]="row" *ngIf="row.data?.isSubTableHeader && !row.data?.immediateParent?.rated">
-                    <td
-                        blueTableCell
-                        [expanderRow]="row"
-                        [expanderLevel]="level"
-                        class="col-rating-class-checkbox"
-                    ></td>
-                    <td
-                        blueTableCell
-                        [attr.colspan]="isFigBanking ? 10 : 9"
-                        class="data-cell-center col-no-rating-message"
-                    >
-                        <span>{{ 'ratingRecommendation.noActiveRatings' | translate }}</span>
-                    </td>
-                    <td
-                        blueTableCell
-                        class="recommendations recommendations-review col-recommendation--rating"
-                        [attr.colspan]="isFigBanking ? 3 : 2"
-                    ></td>
-                </tr>
-            </ng-template>
-        </ng-template>
-    </blue-table>
-</section>
+<ng-container *ngIf="isLoading$ | async"></ng-container>
+<ng-container *ngIf="warningAndSuccessAlert$ | async"></ng-container>
+<ng-container *ngIf="manageRatingsSyncDirection$ | async"></ng-container>
