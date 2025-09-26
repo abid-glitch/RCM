@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, HostBinding, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { BlueModalRef, BlueModalService, BlueTableData } from '@moodys/blue-ng';
+import { BlueModalRef, BlueModalService, BlueTableData, BlueTableRowData } from '@moodys/blue-ng';
 import { RatingRecommendationService } from './services/rating-recommendation.service';
 import { AppRoutes } from '../../routes/routes';
 import { RatingRecommendationTableView, TableDataLoadingStatus } from './enums/rating-recommendation.enum';
@@ -14,13 +14,13 @@ import { RatingGroupType } from '../../shared/models/RatingGroupType';
 import { RatingTemplate } from '../../shared/models/RatingTemplate';
 import { BehaviorSubject, combineLatest, iif, merge, Observable, of, Subject } from 'rxjs';
 import { ContentLoaderService } from '../../shared/services/content-loader.service';
-import { distinctUntilChanged, filter, map, shareReplay, switchMap, takeUntil, tap } from 'rxjs/operators';
+import { distinctUntilChanged, filter, map, shareReplay, switchMap, take, tap } from 'rxjs/operators';
 import { NotificationsService } from 'src/app/core/services/notifications.service';
 import { CasesService, CaseStatus } from '@shared/services/cases';
 import { DataService } from '@shared/services/data.service';
 import { FeatureFlagService } from '@app/shared/services/feature-flag.service';
 import { Router } from '@angular/router';
-import { RecommendationInputTypes } from './enums';
+import { ExcludeMandatoryOutlookRatingClasses, MandatoryOutlookRatingClasses, RecommendationInputTypes } from './enums';
 import { CustomRatingClassData, CustomRatingClassState } from './models/custom-rating-class-state';
 import { Entity } from '@app/shared/models/Entity';
 import { EntityService } from '@app/shared/services/entity.service';
@@ -40,12 +40,8 @@ import { RatingViewType } from '@app/rating-recommendation/enums/entity-rating-t
 })
 export class RatingRecommendationTableComponent implements OnInit, OnDestroy, UnSavedChanges {
     @HostBinding('attr.id') role = 'rcmRatingRecommendationPage';
-    private childCheckboxChanged$ = new Subject<{
-        parentId: string;
-        childIdentifier: string;
-        checked: boolean;
-        viewType: RatingRecommendationTableView;
-    }>();
+
+    preservedDebtSelections: Map<string, boolean> = new Map();
 
     modalRef: BlueModalRef;
     /* Header component data stream*/
@@ -57,8 +53,29 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
     isFigBanking$ = this.ratingRecommendationService.isFigBankingRatingGroup$;
     customRatingClasses$ = this.ratingRecommendationService.customRatingClasses$;
     customDebts$ = this.ratingRecommendationService.customDebts$;
+    isInitPreSelection = true;
+    private hasInitializedPreSelection = false;
+    private isReturningFromSave = false;
+
     ratingRecommendation$ = this.ratingRecommendationService.ratingRecommendationsTableData$.pipe(
-        filter((ratingRecommendation) => ratingRecommendation.length > 0)
+        filter((ratingRecommendation) => ratingRecommendation.length > 0),
+        distinctUntilChanged(),
+        map((ratingRecommendation) => {
+            if (this.isInitPreSelection && !this.hasInitializedPreSelection && !this.isReturningFromSave) {
+                ratingRecommendation.forEach((item) => {
+                    item.children.forEach((child) => {
+                        child.isSelected = !!(
+                            child.data.proposedOutlook ||
+                            child.data.proposedRating ||
+                            child.data.proposedWatchStatus
+                        );
+                    });
+                    item.isSelected = item.children.some((child) => child.isSelected && !child.data.isSubTableHeader);
+                });
+                this.hasInitializedPreSelection = true;
+            }
+            return ratingRecommendation;
+        })
     );
 
     recommendationsDropdownOptionMapping$ = this.ratingRecommendationService.getRecommendationsDropdownOptionMapping$;
@@ -84,8 +101,9 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
 
     manageRatingsSyncDirection$: Observable<void> = this.viewChangesSubject$.pipe(
         filter((viewBy) => !!viewBy),
+        distinctUntilChanged(),
         tap(() => this.ratingRecommendationService.setTableLoadingState('')),
-        switchMap(() => this.ratingRecommendationService.allRatingsWithIssuerLevelRatingInDebtView$),
+        switchMap(() => this.ratingRecommendationService.allRatingsWithIssuerLevelRatingInDebtView$.pipe(take(1))),
         switchMap(() =>
             iif(
                 () => this.ratingRecommendationService.currentSyncDirection(),
@@ -107,11 +125,10 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
     selectedTemplate = this.ratingRecommendationService.getSelectedTemplate();
     updateRatingRecommendation$ = new Subject<BlueTableData>();
     countryCode = '';
-    countryCeilings: BlueTableData = [];
-    isCountryCeilingsEnabled = true;
+    countryCeilings$: Observable<Array<BlueTableRowData>>;
     caseId: string;
     committeeSupportWrapper: CommitteeSupport;
-    isTableViewDisabled: boolean = false;
+    isTableViewDisabled = false;
     committeePackage: any;
 
     ratingRecommendationValidator$ = merge(this.ratingRecommendation$, this.updateRatingRecommendation$);
@@ -139,17 +156,40 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                     table.children
                         .filter((tableRow) => !tableRow.data.isSubTableHeader && tableRow.isSelected)
                         .every((tableRow) => {
-                            return (
-                                (tableRow.data.recommendationInputType === RecommendationInputTypes.OUTLOOK &&
-                                    !!tableRow.data.proposedOutlook &&
-                                    tableRow.data.proposedOutlook !== 'null') ||
-                                (tableRow.data.recommendationInputType !== RecommendationInputTypes.OUTLOOK &&
-                                    !!tableRow.data.proposedRating &&
-                                    tableRow.data.proposedRating !== 'null')
-                            );
+                            const isOutlook =
+                                tableRow.data.recommendationInputType === RecommendationInputTypes.OUTLOOK;
+                            const hasProposedOutlook =
+                                !!tableRow.data.proposedOutlook && tableRow.data.proposedOutlook !== 'null';
+                            const hasProposedRating =
+                                !!tableRow.data.proposedRating && tableRow.data.proposedRating !== 'null';
+                            const mandatoryOutlookRatingClasses = [
+                                MandatoryOutlookRatingClasses.LTIssuerRating,
+                                MandatoryOutlookRatingClasses.LTBankDeposits,
+                                MandatoryOutlookRatingClasses.SeniorUnsecured
+                            ];
+                            const excludeMandatoryOutlookRatingClasses = [
+                                ExcludeMandatoryOutlookRatingClasses.SeniorUnsecuredMTN
+                            ];
+                            if (
+                                this.isFigBanking$.value &&
+                                mandatoryOutlookRatingClasses.some((className) =>
+                                    tableRow.data.name.includes(className)
+                                ) &&
+                                !excludeMandatoryOutlookRatingClasses.some((className) =>
+                                    tableRow.data.name.includes(className)
+                                )
+                            ) {
+                                return (
+                                    (isOutlook && hasProposedOutlook) ||
+                                    (!isOutlook && hasProposedRating && hasProposedOutlook)
+                                );
+                            } else {
+                                return (isOutlook && hasProposedOutlook) || (!isOutlook && hasProposedRating);
+                            }
                         })
                 );
             });
+
             return tableValidation;
         })
     );
@@ -167,7 +207,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                                 return (
                                     !!tableRow.data.proposedRating &&
                                     tableRow.data.proposedRating !== 'null' &&
-                                    !!customDebtsState[tableRow.data.identifier].data.name
+                                    !!customDebtsState[tableRow.data.identifier]?.data?.name
                                 );
                             }
 
@@ -182,6 +222,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                         })
                 );
             });
+
             return tableValidation;
         })
     );
@@ -212,6 +253,8 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
         public entityService: EntityService,
         private committeePackageApiService: CommitteePackageApiService
     ) {
+        this.ratingRecommendationService.isRatingRecommendationPageLoaded$.next(true);
+
         this.isCommitteeWorkflow = this.featureFlagService.isCommitteeWorkflowEnabled(
             this.dataService.committeSupportWrapper
         );
@@ -244,7 +287,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
 
     areSelectedCommitteeSupportPropsEqual(initial: CommitteeSupport, current: CommitteeSupport): boolean {
         function pickProps(committeeSupport: CommitteeSupport) {
-            return committeeSupport.entities.map((entity) => ({
+            return committeeSupport?.entities?.map((entity) => ({
                 id: entity.id,
                 outlook: (() => {
                     if (!entity.outlook) return entity.outlook;
@@ -252,33 +295,38 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                     const pickedOutlook = { proposedOutlook, value };
                     return pickedOutlook;
                 })(),
-                ratingClasses: entity.ratingClasses.map((ratingClass) => ({
-                    ratings: ratingClass.ratings.map((rating) => {
-                        const data = { ...rating };
-                        delete data.refRatings;
-                        delete data.ratingClassBadges;
-                        return data;
-                    })
-                })),
-                debts: entity.debts.map((debt) => ({
-                    ratings: debt.ratings.map((debtRating) => {
-                        const data = { ...debtRating };
-                        delete data.refRatings;
-                        delete data.ratingClassBadges;
-                        return data;
-                    })
-                }))
+                ratingClasses:
+                    entity?.ratingClasses?.map((ratingClass) => ({
+                        ratings: ratingClass.ratings.map((rating) => {
+                            const data = { ...rating };
+                            delete data.refRatings;
+                            delete data.ratingClassBadges;
+                            delete data.recommendationInputType;
+                            return data;
+                        })
+                    })) || [],
+                debts:
+                    entity?.debts?.map((debt) => ({
+                        ratings: debt.ratings.map((debtRating) => {
+                            const data = { ...debtRating };
+                            delete data.refRatings;
+                            delete data.ratingClassBadges;
+                            delete data.recommendationInputType;
+                            return data;
+                        })
+                    })) || []
             }));
         }
         const initialProps = JSON.parse(JSON.stringify(pickProps(initial)));
         const currentProps = JSON.parse(JSON.stringify(pickProps(current)));
+
         return _.isEqual(initialProps, currentProps);
     }
 
     navBackToActionSetupProperties() {
         const initialCommitteeSupport = this.dataService.initialCommitteeSupport;
         const currentCommitteeSupport = this.committeeSupportWrapper;
-        let unSubscribe$ = new Subject<void>();
+        const unSubscribe$ = new Subject<void>();
         combineLatest([
             this.ratingRecommendationService.ratingRecommendationsTableData$,
             this.ratingRecommendationService.selectedRatingViewBy$
@@ -291,6 +339,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                         currentCommitteeSupport,
                         value
                     );
+
                     if (!this.areSelectedCommitteeSupportPropsEqual(initialCommitteeSupport, currentCommitteeSupport)) {
                         this.hasUnsavedChanges = true;
                     } else {
@@ -299,7 +348,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                     unSubscribe$.next();
                     unSubscribe$.complete();
                 }),
-                takeUntil(unSubscribe$)
+                take(1)
             )
             .subscribe();
     }
@@ -332,21 +381,31 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
         this.ratingRecommendationService.determineDefaultView();
         this.setDownloadCompleted(false);
         this.setCommitteePackage();
-        this.initCheckboxActionObservable();
-        // NEW: Initialize child checkbox tracking
-        this.initChildCheckboxObservable();
-
     }
 
     setCommitteePackage() {
         this.committeePackageApiService.getCommitteePackage(this.caseId, null).subscribe((response) => {
             this.committeePackage = response;
             if (this.committeePackage.ratingViewType) {
-                this.ratingRecommendationService.changeRatingTableViewBy(this.committeePackage.ratingViewType === 'DEBT' ? RatingRecommendationTableView.Debt : RatingRecommendationTableView.Class,null);
+                this.ratingRecommendationService.changeRatingTableViewBy(
+                    this.committeePackage.ratingViewType === 'DEBT'
+                        ? RatingRecommendationTableView.Debt
+                        : RatingRecommendationTableView.Class,
+                    null
+                );
             }
             this.isTableViewDisabled = this.committeePackage.canDeleteCommittee === false;
-            this.loadCountryCeilingData();
+            this.dataService.updateRatingSyncDirection(null);
         });
+
+        this.countryCeilings$ = this.fetchCountryCeilings();
+    }
+
+    private fetchCountryCeilings() {
+        return combineLatest([
+            this.ratingRecommendationService.sovereign$,
+            this.ratingRecommendationService.domicile$
+        ]).pipe(map(([sovereign, domicile]) => this.getCountryCeilingTableData(sovereign, domicile)));
     }
 
     private setDownloadCompleted(isDownloadCompleted: boolean) {
@@ -404,11 +463,23 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
             : 'backToRcmBtn';
     }
 
-    onBulkActionDispatched(bulkAction: ActionMenuProp<string | number>) {
-        this.ratingRecommendationService.onBulkActionReceived(bulkAction);
+    onBulkActionDispatched(bulkAction: ActionMenuProp<string | number>, ratingRecommendation, tableView) {
+        const selectedItems = [];
+        ratingRecommendation.forEach((item) => {
+            selectedItems.push(
+                ...item.children.filter((child) => child.isSelected).map((child) => ({ ...child, children: [] }))
+            );
+        });
+
+        let selectedTableData = { [tableView]: { blueTableData: selectedItems } };
+        if (selectedItems && selectedItems.length == 0) {
+            selectedTableData = this.ratingRecommendationService.selectedRatingRecommendationEntitiesSubject.value;
+        }
+        this.ratingRecommendationService.onBulkActionReceived(bulkAction, selectedTableData);
     }
 
     addRatingClass() {
+        this.isInitPreSelection = false;
         const addedClasses = this.ratingRecommendationService.onAddRatingClass();
         if (addedClasses.length > 0) {
             const data: Record<string, CustomRatingClassState> = {};
@@ -423,11 +494,12 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
     }
 
     addDebt() {
+        this.isInitPreSelection = false;
         const addedDebts = this.ratingRecommendationService.onAddDebt();
         if (addedDebts.length > 0) {
             const data: Record<string, CustomDebtState> = {};
-            addedDebts.forEach((addedClass) => {
-                data[addedClass.debt.id] = {
+            addedDebts.forEach((addedDebt) => {
+                data[addedDebt.debt.id] = {
                     loading: false,
                     data: null
                 };
@@ -456,6 +528,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
         this.ratingRecommendationService.resetRatingRecommendationTable();
         this.customRatingClassesState$.next({});
         this.customDebtsState$.next({});
+        this.ratingRecommendationService.isRatingRecommendationPageLoaded$.next(false);
     }
 
     onRatingClassChanged($event: CustomRatingClassData) {
@@ -564,6 +637,7 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
             const debt = entity.debts.find((debt) => debt.id.toString() === identifier.toString());
             debt.name = name;
             debt.originalFaceAmount = +originalFaceAmount;
+            debt.outstandingAmount = +originalFaceAmount;
             debt.currencyCode = currencyCode;
             debt.maturityDate = maturityDate;
             this.customDebtsState$.next({ ...this.customDebtsState$.value, ...data });
@@ -602,18 +676,6 @@ export class RatingRecommendationTableComponent implements OnInit, OnDestroy, Un
                 maturityDate
             );
         }
-    }
-
-    loadCountryCeilingData(): void {
-            const entities = this.committeePackage.entities;
-            const org = entities.find((entity: any) => entity.type === 'ORGANIZATION');
-            const domicile = org?.domicile;
-            const sovereign = org?.sovereign;
-
-            if (domicile && sovereign) {
-                this.countryCeilings = this.getCountryCeilingTableData(sovereign, domicile);
-                this.cdrRef.markForCheck();
-            }
     }
 
     private getCountryCeilingTableData(sovereign: any, domicile: any): BlueTableData {
