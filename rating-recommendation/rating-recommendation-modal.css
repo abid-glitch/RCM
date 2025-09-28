@@ -1,60 +1,80 @@
-@use '@moodys/blue-styles/dist/blue' as blue;
+// Override the specific modal classes I can see in your DevTools
+.modal-window-sm {
+    max-width: 400px !important; // Force override the existing max-width: 600px
+    width: 90vw !important;
+}
 
-// Custom modal size override
-.blue-modal {
-    &.custom-small {
-        max-width: 400px; // Reduced from default
-        width: 90vw; // Responsive width
+// Alternative: Target the blue-modal component more specifically
+::ng-deep .blue-modal {
+    &.modal-window-sm {
+        max-width: 400px !important;
+        width: 90vw !important;
+    }
+    
+    // If the above doesn't work, try targeting the dialog element
+    .modal {
+        max-width: 400px !important;
+        width: 90vw !important;
     }
 }
 
+// Reduce internal spacing to make content more compact
+::ng-deep .blue-modal {
+    .modal-body {
+        padding: 16px !important; // Reduce from default padding
+    }
+    
+    .modal-header {
+        padding: 12px 16px !important;
+    }
+    
+    .modal-footer {
+        padding: 12px 16px !important;
+    }
+}
+
+// Your existing styles with some adjustments
+@use '@moodys/blue-styles/dist/blue' as blue;
+
 .question {
-    @include blue.apply('mb-3', 'ml-2', 'text-sm'); // Reduced margin and font size
+    @include blue.apply('mb-2', 'ml-2', 'text-sm'); // Smaller margins and text
 }
 
 .content {
-    @include blue.apply('flex', 'flex-col'); // Changed to column layout to save horizontal space
+    @include blue.apply('flex', 'flex-col', 'gap-2'); // Stack vertically with small gap
     
     .left,
     .right {
-        @include blue.apply('w-full', 'flex-grow'); // Full width since we're stacking
-    }
-    
-    .right {
-        @include blue.apply('mt-3'); // Add top margin when stacked
+        @include blue.apply('w-full');
     }
 }
 
 .buttons {
-    @include blue.apply('flex', 'justify-end', 'mt-3'); // Reduced top margin
+    @include blue.apply('flex', 'justify-end', 'mt-2', 'gap-2');
 }
 
 .alert-info {
-    @include blue.apply('flex', 'bg-orange-100', 'border-orange-200', 'mb-2', 'p-2'); // Reduced margins and padding
+    @include blue.apply('flex', 'bg-orange-100', 'border-orange-200', 'mb-2', 'p-2', 'text-sm');
     &-icon {
-        @include blue.apply('text-orange-600', 'mr-2'); // Reduced margin
+        @include blue.apply('text-orange-600', 'mr-2');
     }
     &-text {
-        @include blue.apply('text-gray-700', 'leading-relaxed', 'text-sm'); // Smaller text
+        @include blue.apply('text-gray-700', 'leading-relaxed');
     }
 }
 
 .debt-information-option {
-    @include blue.apply('flex', 'items-center', 'mb-1'); // Reduced bottom margin
+    @include blue.apply('flex', 'items-center', 'mb-1');
     &-icon {
         @include blue.apply('text-blue-500', 'ml-1');
     }
-    .field {
-        @include blue.apply('w-auto');
-    }
 }
 
-// Alternative: If you want to keep side-by-side layout but more compact
-.content-compact {
-    @include blue.apply('flex', 'gap-3'); // Reduced gap between columns
-    
-    .left,
-    .right {
-        @include blue.apply('w-1/2', 'flex-grow');
+// If nothing else works, try this nuclear option
+.rating-recommendation-save-and-download-modal {
+    ::ng-deep .modal-dialog {
+        max-width: 400px !important;
+        width: 90vw !important;
+        margin: 1.75rem auto !important;
     }
 }
