@@ -1,44 +1,60 @@
 @use '@moodys/blue-styles/dist/blue' as blue;
 
+// Custom modal size override
+.blue-modal {
+    &.custom-small {
+        max-width: 400px; // Reduced from default
+        width: 90vw; // Responsive width
+    }
+}
+
 .question {
-    @include blue.apply('mb-4', 'ml-2');
+    @include blue.apply('mb-3', 'ml-2', 'text-sm'); // Reduced margin and font size
 }
 
 .content {
-    @include blue.apply('flex');
-
+    @include blue.apply('flex', 'flex-col'); // Changed to column layout to save horizontal space
+    
     .left,
     .right {
-        @include blue.apply('w-1/2', 'flex-grow');
+        @include blue.apply('w-full', 'flex-grow'); // Full width since we're stacking
+    }
+    
+    .right {
+        @include blue.apply('mt-3'); // Add top margin when stacked
     }
 }
 
-
-
 .buttons {
-    @include blue.apply('flex', 'justify-end', 'mt-4');
+    @include blue.apply('flex', 'justify-end', 'mt-3'); // Reduced top margin
 }
 
 .alert-info {
-    @include blue.apply('flex', 'bg-orange-100', 'border-orange-200', 'mb-3', 'p-3');
-
+    @include blue.apply('flex', 'bg-orange-100', 'border-orange-200', 'mb-2', 'p-2'); // Reduced margins and padding
     &-icon {
-        @include blue.apply('text-orange-600', 'mr-3');
+        @include blue.apply('text-orange-600', 'mr-2'); // Reduced margin
     }
-
     &-text {
-        @include blue.apply('text-gray-700', 'leading-relaxed', 'text-base');
+        @include blue.apply('text-gray-700', 'leading-relaxed', 'text-sm'); // Smaller text
     }
 }
 
 .debt-information-option {
-    @include blue.apply('flex', 'items-center');
-
+    @include blue.apply('flex', 'items-center', 'mb-1'); // Reduced bottom margin
     &-icon {
         @include blue.apply('text-blue-500', 'ml-1');
     }
-
     .field {
         @include blue.apply('w-auto');
+    }
+}
+
+// Alternative: If you want to keep side-by-side layout but more compact
+.content-compact {
+    @include blue.apply('flex', 'gap-3'); // Reduced gap between columns
+    
+    .left,
+    .right {
+        @include blue.apply('w-1/2', 'flex-grow');
     }
 }
