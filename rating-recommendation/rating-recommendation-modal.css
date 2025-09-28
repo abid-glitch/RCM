@@ -1,0 +1,44 @@
+@use '@moodys/blue-styles/dist/blue' as blue;
+
+.question {
+    @include blue.apply('mb-4', 'ml-2');
+}
+
+.content {
+    @include blue.apply('flex');
+
+    .left,
+    .right {
+        @include blue.apply('w-1/2', 'flex-grow');
+    }
+}
+
+
+
+.buttons {
+    @include blue.apply('flex', 'justify-end', 'mt-4');
+}
+
+.alert-info {
+    @include blue.apply('flex', 'bg-orange-100', 'border-orange-200', 'mb-3', 'p-3');
+
+    &-icon {
+        @include blue.apply('text-orange-600', 'mr-3');
+    }
+
+    &-text {
+        @include blue.apply('text-gray-700', 'leading-relaxed', 'text-base');
+    }
+}
+
+.debt-information-option {
+    @include blue.apply('flex', 'items-center');
+
+    &-icon {
+        @include blue.apply('text-blue-500', 'ml-1');
+    }
+
+    .field {
+        @include blue.apply('w-auto');
+    }
+}
